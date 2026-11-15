@@ -1,0 +1,9 @@
+/* Le thème officiel est défini dans frontend/index.html via Tailwind. */
+html, body { min-height: 100%; }
+
+/* Impression (rapports, factures) : seul le contenu du module est imprimé. */
+@media print {
+  #sidebar, header, footer, .no-print, #toast-container { display: none !important; }
+  body, #main-content { overflow: visible !important; height: auto !important; background: #fff !important; }
+  #main-content { padding: 0 !important; }
+}

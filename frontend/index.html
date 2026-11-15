@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full bg-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SCHOOL MANAGER PRO - Tableau de bord</title>
+    <meta name="theme-color" content="#0b172a">
+    <meta name="description" content="Gestion scolaire : élèves, notes, présences et paiements.">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/svg+xml" href="/icons/icon-512.svg">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="stylesheet" href="/assets/fonts.css">
+    <link rel="stylesheet" href="/assets/fontawesome.css">
+    <link rel="stylesheet" href="/styles/tailwind.css">
+    <link rel="stylesheet" href="/styles/main.css">
+</head>
+<body class="h-full flex flex-col antialiased text-slate-800 bg-slate-100">
+
+    <div class="flex h-screen overflow-hidden">
+
+        <!-- ================= SIDEBAR ================= -->
+        <div id="sidebar-backdrop" class="hidden fixed inset-0 bg-black/50 z-30 lg:hidden"></div>
+        <aside id="sidebar" class="fixed lg:static inset-y-0 left-0 w-64 max-w-[85vw] bg-[#0b172a] text-slate-300 flex flex-col flex-shrink-0 overflow-y-auto transition-all duration-300 z-40 shadow-2xl lg:shadow-none">
+            
+            <!-- Logo Section -->
+            <div class="px-5 py-6 flex items-center space-x-3 border-b border-slate-800/60">
+                <div class="w-11 h-11 shrink-0 bg-gradient-to-tr from-amber-400 to-amber-300 rounded-xl flex items-center justify-center text-[#0b172a] text-xl shadow-lg shadow-amber-500/20 overflow-hidden">
+                    <i id="brand-icon" class="fa-solid fa-graduation-cap"></i>
+                    <img id="brand-logo-img" alt="" class="hidden w-full h-full object-contain bg-white">
+                </div>
+                <div id="brand-default">
+                    <h1 class="text-white font-extrabold text-lg leading-tight tracking-wide">SCHOOL</h1>
+                    <div class="flex items-center space-x-1">
+                        <span class="text-amber-400 font-bold text-xs tracking-widest">MANAGER</span>
+                        <span class="bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">PRO</span>
+                    </div>
+                </div>
+                <div id="brand-custom" class="hidden min-w-0">
+                    <h1 id="brand-name" class="text-white font-extrabold text-base leading-tight tracking-wide truncate"></h1>
+                    <p id="brand-slogan" class="text-amber-400 text-[11px] font-medium truncate"></p>
+                </div>
+            </div>
+
+            <!-- Profile Badge -->
+            <div class="px-5 py-4 border-b border-slate-800/60 flex items-center space-x-3">
+                <div class="relative">
+                    <img src="/assets/img/avatar.svg" 
+                         alt="Administrateur" 
+                         class="w-11 h-11 rounded-full object-cover border-2 border-slate-600">
+                    <span class="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-[#0b172a] rounded-full"></span>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <h2 id="user-name" class="text-sm font-semibold text-white truncate">—</h2>
+                    <div class="flex items-center text-xs text-slate-400">
+                        <span id="user-role" class="truncate">—</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation Links -->
+            <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+                <a href="#" data-module="dashboard" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-white bg-blue-600 font-medium shadow-md shadow-blue-600/30">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-house w-5 text-center text-sm"></i>
+                        <span class="text-sm">Tableau de bord</span>
+                    </div>
+                </a>
+
+                <a href="#" data-module="portal" class="hidden flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-children w-5 text-center text-sm"></i>
+                        <span class="text-sm">Mes enfants</span>
+                    </div>
+                </a>
+
+                <a href="#" data-module="students" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-user-group w-5 text-center text-sm"></i>
+                        <span class="text-sm">Élèves</span>
+                    </div>
+                </a>
+
+                <a href="#" data-module="teachers" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-chalkboard-user w-5 text-center text-sm"></i>
+                        <span class="text-sm">Enseignants</span>
+                    </div>
+                </a>
+
+                <a href="#" data-module="classes" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-border-all w-5 text-center text-sm"></i>
+                        <span class="text-sm">Classes</span>
+                    </div>
+                </a>
+
+                <a href="#" data-module="timetable" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-calendar-days w-5 text-center text-sm"></i>
+                        <span class="text-sm">Emploi du temps</span>
+                    </div>
+                </a>
+                <a href="#" data-module="grades" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-file-pen w-5 text-center text-sm"></i>
+                        <span class="text-sm">Notes</span>
+                    </div>
+                </a>
+
+                <a href="#" data-module="attendances" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-clipboard-check w-5 text-center text-sm"></i>
+                        <span class="text-sm">Présences</span>
+                    </div>
+                </a>
+
+                <a href="#" data-module="payments" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-wallet w-5 text-center text-sm"></i>
+                        <span class="text-sm">Paiements</span>
+                    </div>
+                </a>
+
+                <a href="#" data-module="broadcasts" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-bullhorn w-5 text-center text-sm"></i>
+                        <span class="text-sm">Communication</span>
+                    </div>
+                </a>
+
+                <a href="#" data-module="messages" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-envelope w-5 text-center text-sm"></i>
+                        <span class="text-sm">Messages</span>
+                    </div>
+                    
+                </a>
+
+                <a href="#" data-module="library" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-book w-5 text-center text-sm"></i>
+                        <span class="text-sm">Bibliothèque</span>
+                    </div>
+                </a>
+
+                <a href="#" data-module="canteen" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-utensils w-5 text-center text-sm"></i>
+                        <span class="text-sm">Cantine</span>
+                    </div>
+                </a>
+
+                <a href="#" data-module="transport" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-bus w-5 text-center text-sm"></i>
+                        <span class="text-sm">Transport</span>
+                    </div>
+                </a>
+
+                <a href="#" data-module="hr" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-id-badge w-5 text-center text-sm"></i>
+                        <span class="text-sm">Personnel (RH)</span>
+                    </div>
+                </a>
+                <a href="#" data-module="documents" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-file-lines w-5 text-center text-sm"></i>
+                        <span class="text-sm">Documents</span>
+                    </div>
+                </a>
+                <a href="#" data-module="stocks" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-boxes-stacked w-5 text-center text-sm"></i>
+                        <span class="text-sm">Stocks</span>
+                    </div>
+                </a>
+                <a href="#" data-module="reports" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-chart-column w-5 text-center text-sm"></i>
+                        <span class="text-sm">Rapports</span>
+                    </div>
+                </a>
+
+                <a href="#" data-module="settings" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-gear w-5 text-center text-sm"></i>
+                        <span class="text-sm">Paramètres</span>
+                    </div>
+                </a>
+
+                <p id="nav-platform-title" class="hidden px-3.5 pt-1 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Plateforme</p>
+                <a href="#" data-module="platform-overview" class="hidden flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-gauge-high w-5 text-center text-sm"></i>
+                        <span class="text-sm">Vue d’ensemble</span>
+                    </div>
+                </a>
+                <a href="#" data-module="platform-tenants" class="hidden flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-school w-5 text-center text-sm"></i>
+                        <span class="text-sm">Établissements</span>
+                    </div>
+                </a>
+                <a href="#" data-module="platform-plans" class="hidden flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-layer-group w-5 text-center text-sm"></i>
+                        <span class="text-sm">Packs et quotas</span>
+                    </div>
+                </a>
+                <a href="#" data-module="platform-billing" class="hidden flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-file-invoice-dollar w-5 text-center text-sm"></i>
+                        <span class="text-sm">Facturation</span>
+                    </div>
+                </a>
+                <a href="#" data-module="platform-mail" class="hidden flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-envelope w-5 text-center text-sm"></i>
+                        <span class="text-sm">E-mails</span>
+                    </div>
+                </a>
+                <a href="#" data-module="platform-audit" class="hidden flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-clock-rotate-left w-5 text-center text-sm"></i>
+                        <span class="text-sm">Journal</span>
+                    </div>
+                </a>
+                <a href="#" data-module="platform-identity" class="hidden flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-palette w-5 text-center text-sm"></i>
+                        <span class="text-sm">Identité</span>
+                    </div>
+                </a>
+                <a href="#" data-module="platform-account" class="hidden flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                    <div class="flex items-center space-x-3">
+                        <i class="fa-solid fa-user-gear w-5 text-center text-sm"></i>
+                        <span class="text-sm">Mon compte</span>
+                    </div>
+                </a>
+
+                <div class="pt-4 mt-2 border-t border-slate-800/60">
+                    <a href="#" id="logout-btn" class="flex items-center space-x-3 px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-colors font-medium">
+                        <i class="fa-solid fa-right-from-bracket w-5 text-center text-sm"></i>
+                        <span class="text-sm">Déconnexion</span>
+                    </a>
+                </div>
+            </nav>
+        </aside>
+
+        <!-- ================= MAIN CONTENT AREA ================= -->
+        <div class="flex-1 flex flex-col overflow-hidden bg-slate-100">
+
+            <!-- Top Header -->
+            <header class="h-16 bg-white border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between gap-2 z-10">
+                <div class="flex items-center space-x-3 sm:space-x-4 flex-1 min-w-0">
+                    <button id="toggle-sidebar" class="text-slate-500 hover:text-slate-700 focus:outline-none">
+                        <i class="fa-solid fa-bars text-lg"></i>
+                    </button>
+
+                    <!-- Search Input -->
+                    <div class="relative w-full max-w-md min-w-0" id="search-box">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                        <input id="global-search" type="search" 
+                               placeholder="Rechercher un élève (nom ou matricule)…" 
+                               class="w-full bg-slate-100 text-slate-700 text-sm pl-10 pr-4 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all border border-transparent focus:border-blue-500" autocomplete="off" aria-label="Rechercher un élève">
+                        <div id="search-results" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-40 max-h-72 overflow-y-auto text-sm"></div>
+                    </div>
+                </div>
+
+                <!-- Right Utilities -->
+                                <div class="flex items-center space-x-3 sm:space-x-5 flex-shrink-0">
+                    <!-- Notification Bell -->
+                    <button id="notif-btn" type="button" aria-label="Notifications" data-module="notifications" class="relative p-2 text-slate-500 hover:text-blue-600 transition-colors rounded-full hover:bg-slate-100"><i class="fa-regular fa-bell text-lg"></i><span id="notif-badge" class="hidden absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold min-w-4 h-4 px-1 rounded-full items-center justify-center"></span></button>
+
+                    <!-- Date Indicator -->
+                    <div class="hidden md:flex items-center space-x-2 text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/80 text-xs font-medium"><i class="fa-regular fa-calendar text-blue-600"></i><span id="today-date">—</span></div>
+                </div>
+            </header>
+
+            <!-- Dashboard Content Container -->
+            <main id="main-content" class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+                <section id="module-view" class="hidden space-y-5"></section>
+
+                <!-- Hero Banner : affiche par défaut ou affiche personnalisée de l'établissement (Paramètres > Affiche d'accueil) -->
+                <div id="hero-banner" class="relative overflow-hidden rounded-2xl bg-blue-700 text-white shadow-xl min-h-[160px] md:aspect-[4/1] flex items-center">
+                    <img id="hero-banner-img" src="/assets/img/banner-default.svg" alt="Affiche d'accueil de l'établissement" class="absolute inset-0 w-full h-full object-cover object-right">
+                    <div id="hero-banner-shade" class="absolute inset-0 pointer-events-none bg-gradient-to-r from-blue-950/75 via-blue-900/30 to-transparent"></div>
+                    <div id="hero-banner-text" class="relative z-10 p-6 lg:p-10 max-w-xl">
+                        <h1 id="hero-banner-title" class="text-2xl lg:text-4xl font-extrabold tracking-tight mb-2 drop-shadow">
+                            Bienvenue sur <span class="text-amber-300">SCHOOL MANAGER PRO !</span>
+                        </h1>
+                        <p id="hero-banner-subtitle" class="text-blue-50 text-sm lg:text-base font-normal drop-shadow">
+                            Gérez votre établissement scolaire en toute simplicité.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- 6 Metrics Stats Cards Grid -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+                    
+                    <!-- Card 1: Élèves -->
+                    <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex items-center space-x-3.5 hover:shadow-md transition-shadow">
+                        <div class="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white text-xl shadow-md shadow-blue-500/20">
+                            <i class="fa-solid fa-users"></i>
+                        </div>
+                        <div>
+                            <div id="metric-students" class="text-2xl font-bold text-slate-900 leading-none mb-1">—</div>
+                            <div class="text-xs font-medium text-slate-500">Élèves</div>
+                        </div>
+                    </div>
+
+                    <!-- Card 2: Enseignants -->
+                    <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex items-center space-x-3.5 hover:shadow-md transition-shadow">
+                        <div class="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center text-white text-xl shadow-md shadow-emerald-500/20">
+                            <i class="fa-solid fa-user-tie"></i>
+                        </div>
+                        <div>
+                            <div id="metric-teachers" class="text-2xl font-bold text-slate-900 leading-none mb-1">—</div>
+                            <div class="text-xs font-medium text-slate-500">Enseignants</div>
+                        </div>
+                    </div>
+
+                    <!-- Card 3: Classes -->
+                    <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex items-center space-x-3.5 hover:shadow-md transition-shadow">
+                        <div class="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center text-white text-xl shadow-md shadow-purple-500/20">
+                            <i class="fa-solid fa-shapes"></i>
+                        </div>
+                        <div>
+                            <div id="metric-classes" class="text-2xl font-bold text-slate-900 leading-none mb-1">—</div>
+                            <div class="text-xs font-medium text-slate-500">Classes</div>
+                        </div>
+                    </div>
+
+                    <!-- Card 4: Notes saisies -->
+                    <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex items-center space-x-3.5 hover:shadow-md transition-shadow">
+                        <div class="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center text-white text-xl shadow-md shadow-amber-500/20 font-bold">
+                            A+
+                        </div>
+                        <div>
+                            <div id="metric-grades" class="text-2xl font-bold text-slate-900 leading-none mb-1">—</div>
+                            <div class="text-xs font-medium text-slate-500">Notes saisies</div>
+                        </div>
+                    </div>
+
+                    <!-- Card 5: Présence moyenne -->
+                    <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex items-center space-x-3.5 hover:shadow-md transition-shadow">
+                        <div class="w-12 h-12 bg-teal-500 rounded-xl flex items-center justify-center text-white text-xl shadow-md shadow-teal-500/20">
+                            <i class="fa-regular fa-calendar-check"></i>
+                        </div>
+                        <div>
+                            <div id="metric-attendance" class="text-2xl font-bold text-slate-900 leading-none mb-1">—</div>
+                            <div class="text-xs font-medium text-slate-500">Présence moyenne</div>
+                        </div>
+                    </div>
+
+                    <!-- Card 6: Paiements ce mois -->
+                    <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex items-center space-x-3.5 hover:shadow-md transition-shadow">
+                        <div class="w-12 h-12 bg-lime-500 rounded-xl flex items-center justify-center text-white text-xl shadow-md shadow-lime-500/20">
+                            <i class="fa-solid fa-sack-dollar"></i>
+                        </div>
+                        <div>
+                            <div id="metric-payments" class="text-lg font-bold text-slate-900 leading-none mb-1">—</div>
+                            <div class="text-xs font-medium text-slate-500">Paiements ce mois</div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Middle Row Section -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    
+                    <!-- Chart: Encaissements des 6 derniers mois -->
+                    <div class="lg:col-span-5 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center space-x-2">
+                                <i class="fa-solid fa-chart-simple text-blue-600"></i>
+                                <h3 class="font-bold text-slate-800 text-sm">Encaissements des 6 derniers mois</h3>
+                            </div>
+                            
+                        </div>
+
+                        <div id="payments-chart" class="relative w-full h-56" role="img" aria-label="Encaissements par mois"><p class="h-full flex items-center justify-center text-sm text-slate-400">Chargement…</p></div>
+                    </div>
+
+                    <!-- Table: Paiements récents -->
+                    <div class="lg:col-span-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center space-x-2">
+                                <i class="fa-solid fa-wallet text-blue-600"></i>
+                                <h3 class="font-bold text-slate-800 text-sm">Paiements récents</h3>
+                            </div>
+                            <a href="#" data-module="payments" class="text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center">
+                                Voir tout <i class="fa-solid fa-arrow-right text-[10px] ml-1"></i>
+                            </a>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="text-[11px] font-semibold text-slate-400 border-b border-slate-100 uppercase tracking-wider">
+                                        <th class="pb-2">#</th>
+                                        <th class="pb-2">Élève</th>
+                                        <th class="pb-2">Montant</th>
+                                        <th class="pb-2">Date</th>
+                                        <th class="pb-2 text-right">Statut</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recent-payments" class="text-xs divide-y divide-slate-100 font-medium text-slate-700"><tr><td colspan="5" class="py-8 text-center text-slate-400">Chargement des paiements depuis l’API…</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Actions rapides -->
+                    <div class="lg:col-span-3 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                        <div class="flex items-center space-x-2 mb-3">
+                            <i class="fa-solid fa-bolt text-amber-500"></i>
+                            <h3 class="font-bold text-slate-800 text-sm">Actions rapides</h3>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3 flex-1">
+                            <!-- Action 1 -->
+                            <button type="button" data-action="add-student" class="bg-blue-50/60 hover:bg-blue-100/80 text-blue-700 p-3 rounded-xl flex flex-col items-center justify-center text-center transition-all group">
+                                <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mb-1.5 text-blue-600 group-hover:scale-110 transition-transform">
+                                    <i class="fa-solid fa-user-plus text-sm"></i>
+                                </div>
+                                <span class="text-[11px] font-semibold leading-tight">Ajouter un élève</span>
+                            </button>
+
+                            <!-- Action 2 -->
+                            <button type="button" data-action="assign-class" class="bg-emerald-50/60 hover:bg-emerald-100/80 text-emerald-700 p-3 rounded-xl flex flex-col items-center justify-center text-center transition-all group">
+                                <div class="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center mb-1.5 text-emerald-600 group-hover:scale-110 transition-transform">
+                                    <i class="fa-solid fa-table-cells text-sm"></i>
+                                </div>
+                                <span class="text-[11px] font-semibold leading-tight">Attribuer une classe</span>
+                            </button>
+
+                            <!-- Action 3 -->
+                            <button type="button" data-action="enter-grades" class="bg-amber-50/60 hover:bg-amber-100/80 text-amber-700 p-3 rounded-xl flex flex-col items-center justify-center text-center transition-all group">
+                                <div class="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center mb-1.5 text-amber-600 group-hover:scale-110 transition-transform font-bold text-xs">
+                                    A+
+                                </div>
+                                <span class="text-[11px] font-semibold leading-tight">Saisir les notes</span>
+                            </button>
+
+                            <!-- Action 4 -->
+                            <button type="button" data-action="add-payment" class="bg-teal-50/60 hover:bg-teal-100/80 text-teal-700 p-3 rounded-xl flex flex-col items-center justify-center text-center transition-all group">
+                                <div class="w-8 h-8 bg-teal-100 rounded-lg flex items-center justify-center mb-1.5 text-teal-600 group-hover:scale-110 transition-transform">
+                                    <i class="fa-regular fa-credit-card text-sm"></i>
+                                </div>
+                                <span class="text-[11px] font-semibold leading-tight">Enregistrer un paiement</span>
+                            </button>
+
+                            <!-- Action 5 -->
+                            <button type="button" data-action="message" class="bg-indigo-50/60 hover:bg-indigo-100/80 text-indigo-700 p-3 rounded-xl flex flex-col items-center justify-center text-center transition-all group">
+                                <div class="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center mb-1.5 text-indigo-600 group-hover:scale-110 transition-transform">
+                                    <i class="fa-regular fa-paper-plane text-sm"></i>
+                                </div>
+                                <span class="text-[11px] font-semibold leading-tight">Envoyer un message</span>
+                            </button>
+
+                            <!-- Action 6 -->
+                            <button type="button" data-action="reports" class="bg-slate-100 hover:bg-slate-200/80 text-slate-700 p-3 rounded-xl flex flex-col items-center justify-center text-center transition-all group">
+                                <div class="w-8 h-8 bg-slate-200 rounded-lg flex items-center justify-center mb-1.5 text-slate-600 group-hover:scale-110 transition-transform">
+                                    <i class="fa-solid fa-chart-pie text-sm"></i>
+                                </div>
+                                <span class="text-[11px] font-semibold leading-tight">Voir les rapports</span>
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Bottom Row Section -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    
+                    <!-- Activités récentes -->
+                    <div class="lg:col-span-12 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center space-x-2">
+                                    <i class="fa-regular fa-clock text-blue-600"></i>
+                                    <h3 class="font-bold text-slate-800 text-sm">Activités récentes</h3>
+                                </div>
+                                
+                            </div>
+
+                            <div id="recent-activities" class="space-y-3.5 text-xs text-slate-500"><p>Chargement…</p></div>
+                        </div>
+                    </div>
+
+                </div>
+
+            </main>
+
+            <!-- Footer -->
+            <footer class="bg-white border-t border-slate-200 px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2">
+                <div>
+                    © <span id="footer-year"></span> <strong id="footer-brand" class="text-slate-700">SCHOOL MANAGER PRO</strong>. Tous droits réservés.
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center space-x-1.5">
+                        <span id="status-dot" class="w-2 h-2 rounded-full bg-slate-300"></span>
+                        <span id="api-status" class="font-medium text-slate-700">Vérification…</span>
+                    </div>
+                    <span class="text-slate-300">|</span>
+                    <span id="app-version">—</span>
+                </div>
+            </footer>
+
+        </div>
+
+    </div>
+
+    <!-- Connexion -->
+    <div id="login-overlay" class="hidden fixed inset-0 z-50 bg-[#0b172a] flex items-center justify-center p-4">
+        <form id="login-form" class="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-7 space-y-4" novalidate>
+            <div class="flex items-center space-x-3 mb-1">
+                <div class="w-11 h-11 shrink-0 bg-gradient-to-tr from-amber-400 to-amber-300 rounded-xl flex items-center justify-center text-[#0b172a] text-xl overflow-hidden"><i id="login-icon" class="fa-solid fa-graduation-cap"></i><img id="login-logo-img" alt="" class="hidden w-full h-full object-contain bg-white"></div>
+                <div class="min-w-0"><h1 id="login-brand-name" class="font-extrabold text-slate-900 leading-tight">SCHOOL MANAGER PRO</h1><p id="login-brand-slogan" class="hidden text-xs font-medium text-amber-600"></p><p class="text-xs text-slate-500">Connexion à votre établissement</p></div>
+            </div>
+            <label class="block text-xs font-semibold text-slate-600">Code de l’établissement
+                <input name="tenant_code" type="text" autocomplete="organization" autocapitalize="characters" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-normal focus:outline-none focus:ring-2 focus:ring-blue-500/30" placeholder="Ex. DEMO (vide pour le superadmin)">
+            </label>
+            <label class="block text-xs font-semibold text-slate-600">Adresse e-mail
+                <input name="email" type="email" required autocomplete="username" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-normal focus:outline-none focus:ring-2 focus:ring-blue-500/30">
+            </label>
+            <label class="block text-xs font-semibold text-slate-600">Mot de passe
+                <input name="password" type="password" required autocomplete="current-password" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-normal focus:outline-none focus:ring-2 focus:ring-blue-500/30">
+            </label>
+            <p id="login-error" class="text-sm text-red-600 min-h-5" role="alert"></p>
+            <button id="login-submit" class="w-full rounded-lg bg-blue-600 hover:bg-blue-700 text-white py-2.5 text-sm font-semibold">Se connecter</button>
+            <button id="forgot-btn" type="button" class="w-full text-center text-xs font-semibold text-blue-600 hover:underline">Mot de passe oublié ?</button>
+        </form>
+    </div>
+
+    <!-- Fenêtre modale (remplace prompt/alert/confirm) -->
+    <div id="modal-overlay" class="hidden fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center p-4">
+        <div id="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-title" class="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto"></div>
+    </div>
+
+    <div id="toast" class="hidden fixed bottom-5 right-5 z-50 max-w-sm rounded-lg px-4 py-3 text-sm font-medium text-white shadow-lg" role="status"></div>
+
+    <script src="/app.js" defer></script>
+</body>
+</html>

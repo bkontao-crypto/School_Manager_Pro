@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 400" width="1600" height="400" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1e3a8a"/>
+      <stop offset=".5" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#38bdf8"/>
+    </linearGradient>
+    <radialGradient id="sun" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#fde68a" stop-opacity=".95"/>
+      <stop offset=".45" stop-color="#fbbf24" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#fbbf24" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#dbeafe"/>
+    </linearGradient>
+    <linearGradient id="roof" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f59e0b"/>
+      <stop offset="1" stop-color="#d97706"/>
+    </linearGradient>
+    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#16a34a"/>
+      <stop offset="1" stop-color="#166534"/>
+    </linearGradient>
+    <pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse">
+      <circle cx="3" cy="3" r="1.6" fill="#fff" fill-opacity=".14"/>
+    </pattern>
+  </defs>
+
+  <rect width="1600" height="400" fill="url(#sky)"/>
+  <rect width="1600" height="400" fill="url(#dots)"/>
+
+  <!-- grandes courbes décoratives -->
+  <circle cx="-60" cy="420" r="260" fill="#fff" fill-opacity=".08"/>
+  <circle cx="620" cy="-90" r="230" fill="#93c5fd" fill-opacity=".16"/>
+  <circle cx="1000" cy="450" r="320" fill="#1e40af" fill-opacity=".35"/>
+
+  <!-- soleil -->
+  <circle cx="1240" cy="120" r="170" fill="url(#sun)"/>
+  <circle cx="1240" cy="120" r="46" fill="#fde68a"/>
+
+  <!-- nuages -->
+  <g fill="#fff" fill-opacity=".9">
+    <ellipse cx="930" cy="92" rx="60" ry="17"/><ellipse cx="962" cy="78" rx="38" ry="18"/><ellipse cx="900" cy="80" rx="28" ry="14"/>
+    <ellipse cx="1480" cy="70" rx="52" ry="14"/><ellipse cx="1506" cy="58" rx="30" ry="14"/>
+  </g>
+
+  <!-- étoiles -->
+  <g fill="#fde68a">
+    <path d="M820 150l5 11 12 1-9 8 3 12-11-6-11 6 3-12-9-8 12-1z" fill-opacity=".9"/>
+    <path d="M1400 175l4 8 9 1-7 6 2 9-8-5-8 5 2-9-7-6 9-1z" fill-opacity=".8"/>
+    <circle cx="760" cy="60" r="3"/><circle cx="1110" cy="48" r="3"/><circle cx="1560" cy="150" r="3"/>
+  </g>
+
+  <!-- sol -->
+  <path d="M640 400V342q300-34 960-6V400z" fill="url(#ground)"/>
+  <path d="M640 372q300-30 960-4" stroke="#bbf7d0" stroke-opacity=".35" stroke-width="3" fill="none"/>
+
+  <!-- arbres -->
+  <g>
+    <rect x="978" y="298" width="9" height="48" fill="#92400e"/>
+    <circle cx="982" cy="284" r="30" fill="#22c55e"/><circle cx="966" cy="300" r="20" fill="#16a34a"/><circle cx="1000" cy="298" r="21" fill="#4ade80"/>
+    <rect x="1470" y="300" width="9" height="46" fill="#92400e"/>
+    <circle cx="1475" cy="286" r="28" fill="#22c55e"/><circle cx="1460" cy="302" r="19" fill="#16a34a"/><circle cx="1491" cy="300" r="20" fill="#4ade80"/>
+  </g>
+
+  <!-- école -->
+  <g transform="translate(1065 0)">
+    <ellipse cx="170" cy="352" rx="210" ry="12" fill="#052e16" fill-opacity=".35"/>
+    <!-- ailes -->
+    <rect x="0" y="236" width="340" height="112" rx="4" fill="url(#wall)"/>
+    <rect x="-8" y="226" width="356" height="14" rx="4" fill="url(#roof)"/>
+    <!-- corps central -->
+    <rect x="96" y="182" width="148" height="166" rx="4" fill="url(#wall)"/>
+    <path d="M84 184L170 118l86 66z" fill="url(#roof)"/>
+    <path d="M170 118l86 66h-12L170 128z" fill="#fff" fill-opacity=".25"/>
+    <!-- horloge -->
+    <circle cx="170" cy="164" r="17" fill="#fff" stroke="#1e3a8a" stroke-width="4"/>
+    <path d="M170 153v11l8 5" stroke="#1e3a8a" stroke-width="3" stroke-linecap="round" fill="none"/>
+    <!-- drapeau -->
+    <rect x="169" y="70" width="3" height="50" fill="#475569"/>
+    <path d="M172 72h42v10h-42z" fill="#16a34a"/><path d="M172 82h42v10h-42z" fill="#facc15"/><path d="M172 92h42v10h-42z" fill="#dc2626"/>
+    <!-- porte -->
+    <path d="M148 348v-60a22 22 0 0 1 44 0v60z" fill="#1d4ed8"/>
+    <path d="M170 266v82" stroke="#93c5fd" stroke-width="2"/>
+    <rect x="132" y="340" width="76" height="8" fill="#cbd5e1"/><rect x="124" y="348" width="92" height="6" fill="#94a3b8"/>
+    <!-- fenêtres -->
+    <g fill="#38bdf8" stroke="#1e3a8a" stroke-width="2.5">
+      <rect x="22" y="262" width="34" height="44" rx="3"/><rect x="72" y="262" width="0" height="0"/>
+      <rect x="284" y="262" width="34" height="44" rx="3"/>
+      <rect x="114" y="204" width="30" height="40" rx="3"/><rect x="196" y="204" width="30" height="40" rx="3"/>
+      <rect x="62" y="262" width="0" height="0"/>
+    </g>
+    <g stroke="#1e3a8a" stroke-width="2"><path d="M39 262v44M22 284h34M301 262v44M284 284h34M129 204v40M114 224h30M211 204v40M196 224h30"/></g>
+  </g>
+
+  <!-- pile de livres + toque -->
+  <g transform="translate(760 262)">
+    <ellipse cx="85" cy="92" rx="96" ry="9" fill="#052e16" fill-opacity=".35"/>
+    <rect x="0" y="62" width="170" height="26" rx="5" fill="#dc2626"/><rect x="8" y="70" width="154" height="4" fill="#fecaca" fill-opacity=".7"/>
+    <rect x="14" y="36" width="146" height="26" rx="5" fill="#2563eb" stroke="#1e3a8a" stroke-width="1"/><rect x="22" y="44" width="130" height="4" fill="#bfdbfe" fill-opacity=".8"/>
+    <rect x="4" y="12" width="150" height="24" rx="5" fill="#f59e0b"/><rect x="12" y="20" width="134" height="4" fill="#fef3c7" fill-opacity=".8"/>
+    <!-- toque de diplômé -->
+    <g transform="translate(78 -14)">
+      <path d="M-44 -4l44 -20 44 20-44 20z" fill="#0f172a"/>
+      <path d="M-44 -4l44 20 44-20v6l-44 20-44-20z" fill="#1e293b"/>
+      <path d="M-26 8v22q26 14 52 0V8l-26 12z" fill="#0f172a"/>
+      <path d="M44 -4v34" stroke="#fbbf24" stroke-width="3"/><circle cx="44" cy="34" r="5" fill="#fbbf24"/>
+    </g>
+  </g>
+
+  <!-- liseré lumineux en bas -->
+  <rect y="396" width="1600" height="4" fill="#fbbf24" fill-opacity=".85"/>
+</svg>
