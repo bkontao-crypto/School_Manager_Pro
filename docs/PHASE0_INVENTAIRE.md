@@ -13,9 +13,8 @@ Branche : `phase0-audit-initial` (base : `retrait-audit-cookies-traceurs-v2` @ e
    - Sans `gateRead` : `/portal`, `/parents`, `/stats`, `/settings`, `/users`.
 
 ## 2. Routes
-- 76 routes déclarées littéralement dans `backend/src/modules/*.js` (méthode + chemin).
-- Les routes CRUD générées par `backend/src/utils/resource.js` (utilisé par 15 fichiers) ne sont **pas comptées** : leur nombre réel demande une exécution de l'application.
-- Répartition : platform 26 · settings 17 · students 14 · identity 8 · broadcasts 8 · portal 7 · platformMail 6 · auth 5 · parents 3 · reports 2 · autres 1 à 1.
+- 132 points d'accès : 100 routes déclarées littéralement + 32 générées par `makeResource` (détail dans `PHASE0_INVENTAIRE_ROUTES.md`). Correction : le chiffre de 76 précédemment indiqué était incomplet.
+- Répartition (routes déclarées) : platform 26 · settings 17 · students 14 · identity 8 · broadcasts 8 · portal 7 · platformMail 6 · auth 5 · parents 3 · reports 2 · autres 1 à 1.
 
 ## 3. Migrations (`database/migrations`, 25 fichiers, ordre 001 → 025)
 001 initial tenants/users · 002 students/classes · 003 parents · 004 teachers · 005 attendances · 006 grades/payments · 007 messages/documents · 008 stocks/notifications · 009 hr/staff · 010 library/canteen · 011 transport · 012 student individual records · 013 hardening · 014 timetable · 015 academic periods · 016 tenant banners · 017 platform superadmin · 018 billing identity · 019 mail/reminders/credit notes · 020 student photos · 021 role permissions · 022 parent portal · 023 notifications channels · 024 unpaid reminders · 025 mail attachments.
