@@ -5,11 +5,14 @@
 //  - le créateur d'une nouvelle conversation en devient participant gestionnaire ;
 //  - les conversations antérieures n'ont pour participants que leurs expéditeurs connus (migration 026).
 // Routes : GET/POST /api/messages/conversations · GET/POST /api/messages/messages (?conversation_id= obligatoire en lecture)
+//          GET /api/messages/conversations/:id/participants · POST (ajout) · DELETE /:userId (retrait) — gestionnaires seulement
 
 const express = require('express');
 const db = require('../utils/db');
-const { HttpError } = require('../utils/http');
+const { HttpError, wrap } = require('../utils/http');
 const { makeResource } = require('../utils/resource');
+const { requireWrite } = require('../utils/permissions');
+const { audit } = require('../utils/audit');
 
 const router = express.Router();
 const isAdmin = (req) => req.user.role === 'admin';
@@ -77,6 +80,72 @@ router.use('/messages', makeResource({
     return result.rows[0];
   },
   module: 'messages'
+}));
+
+// ---- Participants d'une conversation (ordonnance §4.1, point 2) ----
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const checkUuid = (...names) => (req, res, next) => {
+  if (names.every((n) => UUID.test(req.params[n] || ''))) return next();
+  return res.status(400).json({ error: 'Identifiant invalide.' });
+};
+
+// Accès visible : administrateur (conversation de l'établissement) ou participant. Sinon, la conversation n'existe pas pour l'utilisateur.
+async function requireVisible(req, convId) {
+  if (isAdmin(req)) {
+    const c = await db.query('SELECT 1 FROM conversations WHERE id = $1 AND tenant_id = $2', [convId, req.tenantId]);
+    if (!c.rows.length) throw new HttpError(404, 'Conversation introuvable.');
+    return { manager: true };
+  }
+  const m = await db.query(
+    'SELECT is_manager FROM conversation_participants WHERE conversation_id = $1 AND tenant_id = $2 AND user_id = $3',
+    [convId, req.tenantId, req.user.id]
+  );
+  if (!m.rows.length) throw new HttpError(404, 'Conversation introuvable.');
+  return { manager: m.rows[0].is_manager };
+}
+
+const notManager = () => new HttpError(403, 'Seul un gestionnaire de la conversation peut gérer ses participants.');
+
+router.get('/conversations/:id/participants', checkUuid('id'), wrap(async (req, res) => {
+  await requireVisible(req, req.params.id);
+  const rows = await db.query(
+    `SELECT cp.user_id, u.full_name, cp.is_manager, cp.added_at
+       FROM conversation_participants cp
+       JOIN users u ON u.id = cp.user_id AND u.tenant_id = cp.tenant_id
+      WHERE cp.conversation_id = $1 AND cp.tenant_id = $2
+      ORDER BY cp.added_at`,
+    [req.params.id, req.tenantId]
+  );
+  res.json({ data: rows.rows });
+}));
+
+router.post('/conversations/:id/participants', requireWrite('messages'), checkUuid('id'), wrap(async (req, res) => {
+  const { manager } = await requireVisible(req, req.params.id);
+  if (!manager) throw notManager();
+  const userId = req.body && req.body.user_id;
+  if (typeof userId !== 'string' || !UUID.test(userId)) throw new HttpError(400, 'Identifiant d’utilisateur invalide.');
+  const u = await db.query('SELECT 1 FROM users WHERE id = $1 AND tenant_id = $2', [userId, req.tenantId]);
+  if (!u.rows.length) throw new HttpError(404, 'Utilisateur introuvable dans cet établissement.');
+  await db.query(
+    `INSERT INTO conversation_participants (tenant_id, conversation_id, user_id, is_manager, added_by)
+     VALUES ($1, $2, $3, FALSE, $4) ON CONFLICT (conversation_id, user_id) DO NOTHING`,
+    [req.tenantId, req.params.id, userId, req.user.id]
+  );
+  await audit(req, { action: 'conversation.participant_add', entity: 'conversation', entityId: req.params.id, details: { user_id: userId } });
+  res.status(201).json({ data: { conversation_id: req.params.id, user_id: userId } });
+}));
+
+router.delete('/conversations/:id/participants/:userId', requireWrite('messages'), checkUuid('id', 'userId'), wrap(async (req, res) => {
+  const { manager } = await requireVisible(req, req.params.id);
+  if (!manager) throw notManager();
+  const del = await db.query(
+    'DELETE FROM conversation_participants WHERE conversation_id = $1 AND tenant_id = $2 AND user_id = $3 RETURNING user_id',
+    [req.params.id, req.tenantId, req.params.userId]
+  );
+  if (!del.rows.length) throw new HttpError(404, 'Participant introuvable.');
+  await audit(req, { action: 'conversation.participant_remove', entity: 'conversation', entityId: req.params.id, details: { user_id: req.params.userId } });
+  res.json({ data: { conversation_id: req.params.id, user_id: req.params.userId } });
 }));
 
 module.exports = router;
