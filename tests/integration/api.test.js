@@ -514,7 +514,8 @@ if (!TEST_URL) {
         assert.equal(list.json.data.length, 1);
         assert.ok(list.json.data[0].sender_id);
         const foreign = await api('POST', '/api/messages/messages', { token: tokens.adminB, body: { conversation_id: c.json.data.id, content: 'Intrusion' } });
-        assert.equal(foreign.status, 422);
+        // Autre établissement : la conversation est traitée comme inexistante (404, D3).
+        assert.equal(foreign.status, 404);
       });
     });
 
@@ -638,9 +639,18 @@ if (!TEST_URL) {
         const cls = (await api('POST', '/api/classes', { token: tokens.adminA, body: { name: 'BUL 5e' } })).json.data.id;
         const mkStu = async (m) => (await api('POST', '/api/students', { token: tokens.adminA, body: { matricule: m, first_name: m, last_name: 'Bul', class_id: cls } })).json.data.id;
         const [a, b] = [await mkStu('BUL-A'), await mkStu('BUL-B')];
-        const g = (student_id, subject, score, coefficient) => api('POST', '/api/grades', { token: tokens.adminA, body: { student_id, subject, score, coefficient } });
+        // Seules les notes validées entrent dans le bulletin (§4.5) : chaque note est validée après saisie.
+        const g = async (student_id, subject, score, coefficient) => {
+          const r = await api('POST', '/api/grades', { token: tokens.adminA, body: { student_id, subject, score, coefficient } });
+          const v = await api('POST', `/api/grades/${r.json.data.id}/validate`, { token: tokens.adminA });
+          assert.equal(v.status, 200);
+          return r;
+        };
         await g(a, 'Maths', 18, 3); await g(a, 'Maths', 12, 1); await g(a, 'Français', 10, 2);
         await g(b, 'Maths', 8, 3); await g(b, 'Français', 9, 2);
+        // Une note encore en saisie n'apparaît pas dans le bulletin.
+        await api('POST', '/api/grades', { token: tokens.adminA, body: { student_id: a, subject: 'Sport', score: 2, coefficient: 1 } });
+        assert.equal((await api('GET', `/api/students/${a}/report-card`, { token: tokens.adminA })).json.data.subjects.some((x) => x.subject === 'Sport'), false);
         const r = await api('GET', `/api/students/${a}/report-card`, { token: tokens.userA });
         assert.equal(r.status, 200);
         const d = r.json.data;
@@ -675,8 +685,10 @@ if (!TEST_URL) {
         assert.equal((await api('DELETE', `/api/periods/${id}`, { token: tokens.adminA })).status, 200);
 
         const s = (await api('POST', '/api/students', { token: tokens.adminA, body: { matricule: 'PER-1', first_name: 'Per', last_name: 'Iode' } })).json.data.id;
-        await api('POST', '/api/grades', { token: tokens.adminA, body: { student_id: s, subject: 'Maths', score: 10, date: '2026-10-10' } });
-        await api('POST', '/api/grades', { token: tokens.adminA, body: { student_id: s, subject: 'Maths', score: 16, date: '2027-02-10' } });
+        for (const [score, date] of [[10, '2026-10-10'], [16, '2027-02-10']]) {
+          const n = await api('POST', '/api/grades', { token: tokens.adminA, body: { student_id: s, subject: 'Maths', score, date } });
+          assert.equal((await api('POST', `/api/grades/${n.json.data.id}/validate`, { token: tokens.adminA })).status, 200);
+        }
         const t1 = (await api('GET', `/api/students/${s}/report-card?from=2026-09-15&to=2026-12-20`, { token: tokens.adminA })).json.data;
         assert.equal(t1.overall_average, 10);
         const all = (await api('GET', `/api/students/${s}/report-card`, { token: tokens.adminA })).json.data;
@@ -686,6 +698,10 @@ if (!TEST_URL) {
       it('messages : le fil indique l’expéditeur, RH / documents / stocks fonctionnent', async () => {
         const c = (await api('POST', '/api/messages/conversations', { token: tokens.adminA, body: { title: 'Équipe', type: 'group' } })).json.data.id;
         await api('POST', '/api/messages/messages', { token: tokens.adminA, body: { conversation_id: c, content: 'Premier' } });
+        // Non participant : l'enseignant ne peut ni écrire ni lire (conversation inexistante pour lui, §4.1).
+        assert.equal((await api('POST', '/api/messages/messages', { token: tokens.teacherA, body: { conversation_id: c, content: 'Avant' } })).status, 404);
+        const teacherId = (await api('GET', '/api/auth/me', { token: tokens.teacherA })).json.data.id;
+        assert.equal((await api('POST', `/api/messages/conversations/${c}/participants`, { token: tokens.adminA, body: { user_id: teacherId } })).status, 201);
         await api('POST', '/api/messages/messages', { token: tokens.teacherA, body: { conversation_id: c, content: 'Second' } });
         const thread = await api('GET', `/api/messages/messages?conversation_id=${c}`, { token: tokens.adminA });
         assert.equal(thread.json.data.length, 2);
@@ -1397,6 +1413,130 @@ if (!TEST_URL) {
       });
     });
 
+    // ---------------------------------------------------------------- Phase 1 : notes, corrections, périodes, gérant, participants
+    describe('Phase 1 : cycle des notes, corrections, périodes, rôle gérant, participants', () => {
+      const GERANT_PWD = 'Gerant-Pass-2026';
+      let tokGerant; let stu; let grade;
+      const createGrade = (body) => api('POST', '/api/grades', { token: tokens.adminA, body: { student_id: stu, subject: 'Physique', score: 12, coefficient: 1, ...body } });
+      const scoreOf = async (id) => Number((await api('GET', `/api/grades?student_id=${stu}`, { token: tokens.adminA })).json.data.find((g) => g.id === id).score);
+
+      before(async () => {
+        stu = (await api('POST', '/api/students', { token: tokens.adminA, body: { matricule: 'P1-STU', first_name: 'Phase', last_name: 'Un' } })).json.data.id;
+        const u = await api('POST', '/api/users', { token: tokens.adminA, body: { email: 'gerant@a.test', full_name: 'Gérant A', role: 'gerant', password: GERANT_PWD } });
+        assert.equal(u.status, 201);
+        tokGerant = await login('gerant@a.test', 'ECOLEA', GERANT_PWD);
+        grade = (await createGrade({ score: 9 })).json.data.id;
+      });
+
+      it('une note est créée en saisie, quel que soit le statut envoyé ; validation et annulation contrôlées', async () => {
+        const forced = await createGrade({ status: 'validee' });
+        assert.equal(forced.status, 201);
+        assert.equal(forced.json.data.status, 'saisie');
+        const id = forced.json.data.id;
+        assert.equal((await api('POST', `/api/grades/${id}/validate`, { token: tokens.teacherA })).status, 403);
+        assert.equal((await api('POST', `/api/grades/${id}/validate`, { token: tokens.adminA })).status, 200);
+        assert.equal((await api('POST', `/api/grades/${id}/validate`, { token: tokens.adminA })).status, 409);
+        assert.equal((await api('POST', `/api/grades/${id}/cancel`, { token: tokens.adminA })).status, 409);
+        const other = (await createGrade({})).json.data.id;
+        assert.equal((await api('POST', `/api/grades/${other}/cancel`, { token: tokens.adminA })).status, 200);
+        assert.equal((await api('POST', `/api/grades/${other}/cancel`, { token: tokens.adminA })).status, 409);
+        assert.equal((await api('POST', `/api/grades/${other}/validate`, { token: tokens.adminB })).status, 404); // autre établissement
+      });
+
+      it('correction : demande avec motif, une seule en attente, décision par un administrateur différent du demandeur', async () => {
+        assert.equal((await api('POST', `/api/grades/${grade}/validate`, { token: tokens.adminA })).status, 200);
+        const req = (tok, body) => api('POST', `/api/grades/${grade}/corrections`, { token: tok, body });
+        assert.equal((await req(tokens.userA, { score: 14, reason: 'Erreur de saisie' })).status, 403);     // pas d'écriture sur les notes
+        assert.equal((await req(tokens.teacherA, { score: 14, reason: 'abc' })).status, 400);             // motif trop court
+        assert.equal((await req(tokens.teacherA, { score: 25, reason: 'Erreur de saisie' })).status, 400); // note hors barème
+        const c = await req(tokens.teacherA, { score: 14, reason: 'Erreur de saisie' });
+        assert.equal(c.status, 201);
+        assert.equal(c.json.data.status, 'pending');
+        assert.equal((await req(tokens.teacherA, { score: 13, reason: 'Autre demande' })).status, 409);
+        assert.equal(await scoreOf(grade), 9, 'la note ne change pas avant décision');
+
+        const pending = await api('GET', '/api/grades/corrections', { token: tokens.adminA });
+        assert.ok(pending.json.data.some((x) => x.id === c.json.data.id));
+        assert.equal((await api('GET', '/api/grades/corrections', { token: tokens.teacherA })).status, 403);
+
+        const cid = c.json.data.id;
+        assert.equal((await api('POST', `/api/grades/corrections/${cid}/approve`, { token: tokens.teacherA, body: { reason: 'Je valide' } })).status, 403);
+        assert.equal((await api('POST', `/api/grades/corrections/${cid}/approve`, { token: tokens.adminA, body: {} })).status, 400); // motif obligatoire
+        assert.equal((await api('POST', `/api/grades/corrections/${cid}/approve`, { token: tokens.adminB, body: { reason: 'Autre école' } })).status, 404);
+        assert.equal((await api('POST', `/api/grades/corrections/${cid}/approve`, { token: tokens.adminA, body: { reason: 'Vérifié sur copie' } })).status, 200);
+        assert.equal(await scoreOf(grade), 14);
+        assert.equal((await api('POST', `/api/grades/corrections/${cid}/approve`, { token: tokens.adminA, body: { reason: 'Encore' } })).status, 409);
+      });
+
+      it('le demandeur ne peut jamais décider de sa propre correction ; rejet sans effet sur la note', async () => {
+        // Rejet par un administrateur d'une proposition d'enseignant : la note ne change pas.
+        const rejected = await api('POST', `/api/grades/${grade}/corrections`, { token: tokens.teacherA, body: { score: 17, reason: 'Proposition' } });
+        assert.equal(rejected.status, 201);
+        assert.equal((await api('POST', `/api/grades/corrections/${rejected.json.data.id}/reject`, { token: tokens.adminA, body: { reason: 'Pas de preuve' } })).status, 200);
+        assert.equal(await scoreOf(grade), 14, 'un rejet ne modifie pas la note');
+        // Demande de l'administrateur lui-même : il ne peut pas la décider. (Limite connue : avec un seul administrateur,
+        // cette demande reste en attente ; voir docs/RAPPORT_TESTS_PHASE1.md.)
+        const own = await api('POST', `/api/grades/${grade}/corrections`, { token: tokens.adminA, body: { score: 15, reason: 'Correction admin' } });
+        assert.equal(own.status, 201);
+        const cid = own.json.data.id;
+        assert.equal((await api('POST', `/api/grades/corrections/${cid}/approve`, { token: tokens.adminA, body: { reason: 'Moi-même' } })).status, 403);
+        assert.equal((await api('POST', `/api/grades/corrections/${cid}/reject`, { token: tokens.adminA, body: { reason: 'Non justifié' } })).status, 403);
+        assert.equal(await scoreOf(grade), 14);
+      });
+
+      it('une note non validée ne se corrige pas par cette procédure', async () => {
+        const draft = (await createGrade({ subject: 'Chimie' })).json.data.id;
+        assert.equal((await api('POST', `/api/grades/${draft}/corrections`, { token: tokens.teacherA, body: { score: 10, reason: 'Motif valable' } })).status, 409);
+      });
+
+      it('clôture de période : admin seul ; notes verrouillées ; suppression refusée ; réouverture avec motif', async () => {
+        const p = (await api('POST', '/api/periods', { token: tokens.adminA, body: { name: 'T-Clôture', start_date: '2025-01-01', end_date: '2025-03-31' } })).json.data.id;
+        assert.equal((await api('POST', `/api/periods/${p}/close`, { token: tokens.teacherA })).status, 403);
+        assert.equal((await api('POST', `/api/periods/${p}/close`, { token: tokens.adminB })).status, 404);
+        const inPeriod = (await createGrade({ subject: 'Histoire', date: '2025-02-10' })).json.data.id; // créée avant clôture : en saisie
+        assert.equal((await api('POST', `/api/periods/${p}/close`, { token: tokens.adminA })).status, 200);
+        assert.equal((await api('POST', `/api/periods/${p}/close`, { token: tokens.adminA })).status, 409);
+        assert.equal((await createGrade({ date: '2025-02-11' })).status, 409);                       // nouvelle note refusée
+        assert.equal((await api('POST', `/api/grades/${inPeriod}/validate`, { token: tokens.adminA })).status, 409); // validation refusée
+        assert.equal((await api('POST', `/api/grades/${inPeriod}/cancel`, { token: tokens.adminA })).status, 409);
+        assert.equal((await api('DELETE', `/api/periods/${p}`, { token: tokens.adminA })).status, 409);
+        assert.equal((await api('POST', `/api/periods/${p}/reopen`, { token: tokens.adminA, body: { reason: 'ab' } })).status, 400);
+        assert.equal((await api('POST', `/api/periods/${p}/reopen`, { token: tokens.teacherA, body: { reason: 'Motif suffisant' } })).status, 403);
+        assert.equal((await api('POST', `/api/periods/${p}/reopen`, { token: tokens.adminA, body: { reason: 'Note oubliée sur la copie' } })).status, 200);
+        assert.equal((await api('POST', `/api/grades/${inPeriod}/validate`, { token: tokens.adminA })).status, 200);
+        assert.equal((await api('POST', `/api/periods/${p}/reopen`, { token: tokens.adminA, body: { reason: 'Déjà ouverte' } })).status, 409);
+        const audit = (await pool.query(`SELECT count(*)::int AS n FROM audit_logs WHERE tenant_id = $1 AND action IN ('academic_period.close', 'academic_period.reopen')`, [TA])).rows[0].n;
+        assert.ok(audit >= 2);
+      });
+
+      it('rôle gérant : peut rouvrir une période ; pas de paiements, RH ni clôture', async () => {
+        const p = (await api('POST', '/api/periods', { token: tokens.adminA, body: { name: 'T-Gérant', start_date: '2025-04-01', end_date: '2025-06-30' } })).json.data.id;
+        assert.equal((await api('POST', `/api/periods/${p}/close`, { token: tokens.adminA })).status, 200);
+        assert.equal((await api('POST', `/api/periods/${p}/close`, { token: tokGerant })).status, 403);
+        assert.equal((await api('POST', `/api/periods/${p}/reopen`, { token: tokGerant, body: { reason: 'Rectification gérant' } })).status, 200);
+        assert.equal((await api('GET', '/api/payments', { token: tokGerant })).status, 403);
+        assert.equal((await api('GET', '/api/hr', { token: tokGerant })).status, 403);
+        assert.equal((await api('GET', '/api/grades', { token: tokGerant })).status, 200);
+      });
+
+      it('messagerie : retrait d’un participant, accès coupé immédiatement, lecture marquée par le participant seulement', async () => {
+        const c = (await api('POST', '/api/messages/conversations', { token: tokens.adminA, body: { title: 'Retrait', type: 'group' } })).json.data.id;
+        const userId = (await api('GET', '/api/auth/me', { token: tokens.userA })).json.data.id;
+        assert.equal((await api('POST', `/api/messages/conversations/${c}/participants`, { token: tokens.adminA, body: { user_id: userId } })).status, 201);
+        assert.equal((await api('POST', '/api/messages/messages', { token: tokens.userA, body: { conversation_id: c, content: 'Bonjour à tous' } })).status, 201);
+        assert.equal((await api('POST', `/api/messages/conversations/${c}/read`, { token: tokens.userA })).status, 200);
+        assert.equal((await api('POST', `/api/messages/conversations/${c}/read`, { token: tokens.teacherA })).status, 404); // non participant
+        assert.equal((await api('POST', `/api/messages/conversations/${c}/participants`, { token: tokens.userA, body: { user_id: userId } })).status, 403); // participant non gestionnaire
+        assert.equal((await api('DELETE', `/api/messages/conversations/${c}/participants/${userId}`, { token: tokens.adminA })).status, 200);
+        // Lecture : fil vide, sans fuite du contenu d'avant le retrait.
+        const thread = await api('GET', `/api/messages/messages?conversation_id=${c}`, { token: tokens.userA });
+        assert.equal(thread.status, 200);
+        assert.equal(thread.json.data.length, 0);
+        assert.equal((await api('POST', '/api/messages/messages', { token: tokens.userA, body: { conversation_id: c, content: 'Toujours là ?' } })).status, 404);
+        assert.equal((await api('DELETE', `/api/messages/conversations/${c}/participants/${userId}`, { token: tokens.adminA })).status, 404);
+      });
+    });
+
     describe('Portail parent', () => {
       const mkStudent = async (token, mat, name) => (await api('POST', '/api/students', { token, body: { matricule: mat, first_name: name, last_name: 'Portail' } })).json.data.id;
       let s1; let s2; let s3; let pA; let pB; let tokP1; let tokP2;
@@ -1437,6 +1577,13 @@ if (!TEST_URL) {
         assert.equal((await api('GET', '/api/portal/children/pas-un-uuid', { token: tokP1 })).status, 404);
         const d = await api('GET', `/api/portal/children/${s1}`, { token: tokP1 });
         assert.equal(d.status, 200); assert.equal(d.json.data.student.last_name, 'Portail'); assert.equal(d.json.data.parents, undefined);
+        // Notes : le parent ne voit que les notes validées (une note en saisie n'entre pas encore au bulletin).
+        await api('POST', '/api/grades', { token: tokens.adminA, body: { student_id: s1, subject: 'Brouillon-parent', score: 7, coefficient: 1 } });
+        const vf = await api('POST', '/api/grades', { token: tokens.adminA, body: { student_id: s1, subject: 'Validée-parent', score: 15, coefficient: 1 } });
+        assert.equal((await api('POST', `/api/grades/${vf.json.data.id}/validate`, { token: tokens.adminA })).status, 200);
+        const seen = (await api('GET', `/api/portal/children/${s1}`, { token: tokP1 })).json.data.grades.map((g) => g.subject);
+        assert.ok(seen.includes('Validée-parent'));
+        assert.ok(!seen.includes('Brouillon-parent'), 'une note en saisie ne doit pas apparaître côté parent');
         assert.equal((await api('GET', `/api/portal/children/${s1}/report-card`, { token: tokP1 })).status, 200);
         assert.equal((await api('GET', `/api/portal/children/${s1}/timetable`, { token: tokP1 })).status, 200);
         // un enfant retiré disparaît aussitôt
@@ -1547,7 +1694,9 @@ if (!TEST_URL) {
         assert.ok(pay.startsWith('Reçu;Élève;Montant (F CFA);')); assert.match(pay, /R-\d{4}-\d{6}/);
         assert.ok(!(await (await get('/api/payments/export.csv', tokens.adminB)).text()).includes('Portail'));
         // droits : l'enseignant sans droit de lecture « Paiements » reçoit 403 ; le parent est fermé
-        assert.equal((await get('/api/payments/export.csv', tokens.teacherA)).status, 200); // lecture seule par défaut
+        assert.equal((await get('/api/payments/export.csv', tokens.teacherA)).status, 403); // D1 : aucun accès par défaut
+        await api('PUT', '/api/settings/permissions', { token: tokens.adminA, body: { changes: [{ role: 'teacher', module: 'payments', level: 'read' }] } });
+        assert.equal((await get('/api/payments/export.csv', tokens.teacherA)).status, 200); // ouverture par l'administrateur
         await api('PUT', '/api/settings/permissions', { token: tokens.adminA, body: { changes: [{ role: 'teacher', module: 'payments', level: 'none' }] } });
         assert.equal((await get('/api/payments/export.csv', tokens.teacherA)).status, 403);
         await api('DELETE', '/api/settings/permissions', { token: tokens.adminA });
