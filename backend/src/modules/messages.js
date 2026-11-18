@@ -125,8 +125,10 @@ router.post('/conversations/:id/participants', requireWrite('messages'), checkUu
   if (!manager) throw notManager();
   const userId = req.body && req.body.user_id;
   if (typeof userId !== 'string' || !UUID.test(userId)) throw new HttpError(400, 'Identifiant d’utilisateur invalide.');
-  const u = await db.query('SELECT 1 FROM users WHERE id = $1 AND tenant_id = $2', [userId, req.tenantId]);
+  const u = await db.query('SELECT role FROM users WHERE id = $1 AND tenant_id = $2', [userId, req.tenantId]);
   if (!u.rows.length) throw new HttpError(404, 'Utilisateur introuvable dans cet établissement.');
+  // Le portail parent n'accède qu'à /portal (cloisonnement d'index.js) : pas de messagerie pour ce rôle avant la Phase 5.
+  if (u.rows[0].role === 'parent') throw new HttpError(400, 'Les comptes parent ne peuvent pas être ajoutés à la messagerie.');
   await db.query(
     `INSERT INTO conversation_participants (tenant_id, conversation_id, user_id, is_manager, added_by)
      VALUES ($1, $2, $3, FALSE, $4) ON CONFLICT (conversation_id, user_id) DO NOTHING`,
