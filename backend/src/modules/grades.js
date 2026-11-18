@@ -160,6 +160,15 @@ async function decideCorrection(req, res, decision) {
 router.post('/corrections/:cid/approve', requireRole('admin'), wrap((req, res) => decideCorrection(req, res, 'approved')));
 router.post('/corrections/:cid/reject', requireRole('admin'), wrap((req, res) => decideCorrection(req, res, 'rejected')));
 
+// Demandes en attente de l'utilisateur courant (pour afficher « Retirer ma demande » sur les notes concernées).
+router.get('/corrections/mine', requireWrite('grades'), wrap(async (req, res) => {
+  const r = await db.query(
+    `SELECT id, grade_id FROM grade_corrections WHERE tenant_id = $1 AND requested_by = $2 AND status = 'pending'`,
+    [req.tenantId, req.user.id]
+  );
+  res.json({ data: r.rows });
+}));
+
 // Retrait par l'auteur de sa propre demande en attente (décision 1 : évite qu'une demande reste bloquée
 // quand l'administrateur est aussi son auteur). La décision est tracée avec motif, comme une décision d'administrateur.
 router.post('/corrections/:cid/withdraw', requireWrite('grades'), wrap(async (req, res) => {

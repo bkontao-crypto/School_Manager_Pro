@@ -42,9 +42,12 @@ Bloc « Phase 1 : cycle des notes, corrections, périodes, rôle gérant, partic
   - Mobile 390 px : aucun débordement horizontal (scrollWidth = clientWidth).
 - **Correctif trouvé pendant ce parcours** : la section « Utilisateurs » s'affichait au gérant avec un bouton « Ajouter » qui échouait (l'API réserve /api/users à l'administrateur). Section retirée et gestionnaires désactivés pour les non-administrateurs (`frontend/app.js`).
 
+- **Recette navigateur Phase 1** (`tests/browser/recette-phase1.js`) : 18/18 vérifications. Enseignant : demande de correction puis retrait à l'écran (contrôlé côté serveur). Administrateur : validation d'une note en saisie, approbation d'une correction depuis Paramètres, clôture de période, verrouillage d'une note dans la période. Gérant : réouverture ; section Utilisateurs absente. Tableau de bord chargé sans erreur pour les trois rôles.
+- **Suites** après ces changements : intégration 95/95, unitaires 25/25.
+
 ## 4. Ce qui n'est pas vérifié
 
-- Parcours navigateur complet : la validation et la correction de notes à l’écran, et le tableau de bord de chaque rôle, ne sont pas encore parcourus.
+- Parcours navigateur : couvert pour les notes, corrections, périodes et tableaux de bord des trois rôles testés ; pas encore pour le parent, l’enseignant sur ses seules classes, ni sur mobile au-delà de la page des notes.
 - Mise à niveau depuis une copie de base réelle : non exécutée.
 - Rendu visuel du bulletin : contrôlé une fois sur un PDF généré avec des données fictives ; le libellé de colonne « Notes » est à clarifier.
 
@@ -56,7 +59,6 @@ Résolues dans cette livraison :
 3. **Stockage des documents (§4.4)** : téléversement réel (PDF, PNG, JPEG), contrôle de la signature du fichier et de l'extension, limite de taille (`DOCUMENT_MAX_MB`, 10 Mo par défaut), nom de stockage aléatoire, dossier privé (`DOCUMENTS_DIR`), téléchargement authentifié avec en-tête `nosniff`, brouillons réservés aux rédacteurs, journalisation (D6). Testé : 95/95 en intégration, et téléversement vérifié dans le navigateur.
 
 Restent ouvertes :
-- **Retrait de demande à l'écran** : disponible pour l'administrateur (liste des corrections dans Paramètres) ; pas encore d'écran pour l'enseignant, qui peut le faire par API seulement.
 - **Documents** : pas d'analyse antivirus (service indisponible ici), pas de versions (un document ne reçoit qu'un fichier), pas de rattachement par classe pour la lecture, la liste reste visible à tous les lecteurs du module.
 - **Accusés de réception et de lecture** (§4.1 point 6) : non implémentés.
 - **Statuts des notes** : conservés tels quels (D5).

@@ -1454,6 +1454,8 @@ if (!TEST_URL) {
         const c = await req(tokens.teacherA, { score: 14, reason: 'Erreur de saisie' });
         assert.equal(c.status, 201);
         assert.equal(c.json.data.status, 'pending');
+        assert.ok((await api('GET', '/api/grades/corrections/mine', { token: tokens.teacherA })).json.data.some((x) => x.id === c.json.data.id));
+        assert.equal((await api('GET', '/api/grades/corrections/mine', { token: tokens.userA })).status, 403);
         assert.equal((await req(tokens.teacherA, { score: 13, reason: 'Autre demande' })).status, 409);
         assert.equal(await scoreOf(grade), 9, 'la note ne change pas avant décision');
 
