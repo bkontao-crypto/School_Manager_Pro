@@ -36,7 +36,7 @@ async function loadProfile(tenantId, id, { withParents = true } = {}) {
   return { student: student.rows[0], parents: parents.rows, grades: grades.rows, attendances: attendances.rows, payments: payments.rows };
 }
 
-// Bulletin : moyennes pondérées par matière et générale (notes non annulées), rang dans la classe, appréciation. null si élève absent.
+// Bulletin : moyennes pondérées par matière et générale (notes VALIDÉES uniquement, ordonnance §6.4), rang dans la classe, appréciation. null si élève absent.
 async function loadReportCard(tenantId, id, f = {}) {
   const student = await db.query(
     `SELECT s.id, s.matricule, s.first_name, s.last_name, s.date_of_birth, s.class_id, c.name AS class_name, c.school_year
@@ -51,7 +51,7 @@ async function loadReportCard(tenantId, id, f = {}) {
   const subjects = await db.query(
     `SELECT g.subject, SUM(g.score * COALESCE(g.coefficient, 1)) / NULLIF(SUM(COALESCE(g.coefficient, 1)), 0) AS average,
             SUM(COALESCE(g.coefficient, 1)) AS coefficient, count(*) AS notes
-       FROM grades g WHERE g.tenant_id = $1 AND g.student_id = $${sid} AND g.status <> 'annulee'${period}
+       FROM grades g WHERE g.tenant_id = $1 AND g.student_id = $${sid} AND g.status = 'validee'${period}
       GROUP BY g.subject ORDER BY g.subject`, params);
   const toNum = (v) => (v === null || v === undefined ? null : Math.round(Number(v) * 100) / 100);
   let overall = null; let rank = null; let classSize = null;
@@ -67,7 +67,7 @@ async function loadReportCard(tenantId, id, f = {}) {
     const all = await db.query(
       `SELECT g.student_id, SUM(g.score * COALESCE(g.coefficient, 1)) / NULLIF(SUM(COALESCE(g.coefficient, 1)), 0) AS average
          FROM grades g JOIN students s ON s.tenant_id = g.tenant_id AND s.id = g.student_id
-        WHERE g.tenant_id = $1 AND s.class_id = $2 AND s.deleted_at IS NULL AND g.status <> 'annulee'${per2}
+        WHERE g.tenant_id = $1 AND s.class_id = $2 AND s.deleted_at IS NULL AND g.status = 'validee'${per2}
         GROUP BY g.student_id`, p2);
     const avgs = all.rows.map((r) => ({ id: r.student_id, avg: Number(r.average) }));
     classSize = avgs.length;
