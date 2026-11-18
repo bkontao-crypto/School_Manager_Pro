@@ -49,3 +49,7 @@ Totaux fichiers : 43 CREATE TABLE, 36 ADD COLUMN, 47 CREATE INDEX.
 ## 027_period_closure.sql (ajoutée en Phase 1)
 - Additive : `academic_periods.closed_at`, `closed_by` (nullables), clé composite `academic_periods_closed_by_fk` vers `users (id, tenant_id)`.
 - Appliquée deux fois sur `smp_test` sans erreur (idempotente). Retour arrière : voir l'en-tête du fichier.
+
+## 028_grade_corrections_reopen.sql (ajoutée en Phase 1)
+- Additive : index unique `grades_id_tenant_uniq`, table `grade_corrections` (une demande en attente par note), colonnes `reopened_at`, `reopened_by`, `reopen_reason` sur `academic_periods`.
+- Appliquée deux fois sur `smp_fresh` sans erreur (idempotente). Retour arrière : voir l'en-tête du fichier.

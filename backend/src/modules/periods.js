@@ -55,4 +55,21 @@ router.post('/:id/close', requireRole('admin'), wrap(async (req, res) => {
   res.json({ data: r.rows[0] });
 }));
 
+// Réouverture : administrateur, motif obligatoire, journalisée. Le motif et l'auteur restent enregistrés sur la période.
+router.post('/:id/reopen', requireRole('admin'), wrap(async (req, res) => {
+  if (!isUuid(req.params.id)) throw new HttpError(400, 'Identifiant invalide.');
+  const reason = req.body && req.body.reason;
+  if (typeof reason !== 'string' || reason.trim().length < 5) throw new HttpError(400, 'Motif obligatoire (5 caractères minimum).');
+  const r = await db.query(
+    `UPDATE academic_periods
+        SET closed_at = NULL, closed_by = NULL, reopened_at = now(), reopened_by = $3, reopen_reason = $4
+      WHERE id = $1 AND tenant_id = $2 AND closed_at IS NOT NULL
+      RETURNING id, name, reopened_at`,
+    [req.params.id, req.tenantId, req.user.id, reason.trim()]
+  );
+  if (!r.rows.length) await missingOrConflict(req, req.params.id, () => 'Cette période n’est pas clôturée.');
+  await audit(req, { action: 'academic_period.reopen', entity: 'academic_period', entityId: r.rows[0].id, details: { reason: reason.trim() } });
+  res.json({ data: r.rows[0] });
+}));
+
 module.exports = router;

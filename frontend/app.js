@@ -548,11 +548,11 @@ async function openModule(key, opts = {}) {
     ${cfg.endpoint && EXPORTABLE[key] ? '<button id="module-export" class="px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 text-sm font-semibold"><i class="fa-solid fa-file-excel mr-2"></i>Exporter</button>' : ''}
     ${writable ? '<button id="module-add" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-2"></i>Ajouter</button>' : ''}</div></div>
     <section class="bg-white rounded-2xl border border-slate-200 p-5"><div class="flex justify-between items-center mb-4"><h3 class="font-bold">Liste</h3><span id="module-count" class="text-xs text-slate-500">Chargement…</span></div>
-    <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-xs text-slate-500 border-b">${cfg.columns.map((c) => `<th class="py-3 pr-4">${c[1]}</th>`).join('')}${key === 'students' && writable ? '<th class="py-3 pr-2">Actions</th>' : key === 'students' ? '<th class="py-3 pr-2">Dossier</th>' : key === 'payments' ? '<th class="py-3 pr-2">PDF</th>' : ''}</tr></thead>
+    <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-xs text-slate-500 border-b">${cfg.columns.map((c) => `<th class="py-3 pr-4">${c[1]}</th>`).join('')}${key === 'students' && writable ? '<th class="py-3 pr-2">Actions</th>' : key === 'students' ? '<th class="py-3 pr-2">Dossier</th>' : key === 'payments' ? '<th class="py-3 pr-2">PDF</th>' : key === 'grades' ? '<th class="py-3 pr-2">Actions</th>' : ''}</tr></thead>
     <tbody id="module-rows"></tbody></table></div>
     <div class="flex items-center justify-between mt-4"><button id="page-prev" class="text-sm text-blue-600 disabled:text-slate-300">← Précédent</button><span id="page-info" class="text-xs text-slate-500"></span><button id="page-next" class="text-sm text-blue-600 disabled:text-slate-300">Suivant →</button></div>
     <p id="module-error" class="text-sm text-red-600 mt-3" role="alert"></p></section>`;
-  const colSpan = cfg.columns.length + (key === 'students' || key === 'payments' ? 1 : 0);
+  const colSpan = cfg.columns.length + (key === 'students' || key === 'payments' || key === 'grades' ? 1 : 0);
 
   async function refresh() {
     const tbody = $('module-rows'), count = $('module-count'), err = $('module-error');
@@ -566,13 +566,33 @@ async function openModule(key, opts = {}) {
       $('page-prev').disabled = listState.offset === 0;
       $('page-next').disabled = listState.offset + data.length >= total;
       tbody.innerHTML = data.length ? data.map((item) => `<tr class="border-b border-slate-100 hover:bg-slate-50">${cfg.columns.map(([k, , fmt]) => `<td class="py-3 pr-4 text-slate-700">${renderCell(item[k], fmt)}</td>`).join('')}${key === 'students'
-        ? `<td class="py-3 pr-2 whitespace-nowrap"><button type="button" data-act="profile" data-id="${escapeHtml(item.id)}" class="text-emerald-700 hover:underline mr-3">Dossier</button>${writable ? `<button type="button" data-act="edit" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline mr-3">Modifier</button><button type="button" data-act="delete" data-id="${escapeHtml(item.id)}" class="text-red-600 hover:underline">Supprimer</button>` : ''}</td>` : key === 'payments' ? `<td class="py-3 pr-2">${item.status === 'paye' ? `<button type="button" data-act="receipt" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline"><i class="fa-solid fa-file-pdf mr-1"></i>Reçu</button>` : ''}</td>` : ''}</tr>`).join('')
+        ? `<td class="py-3 pr-2 whitespace-nowrap"><button type="button" data-act="profile" data-id="${escapeHtml(item.id)}" class="text-emerald-700 hover:underline mr-3">Dossier</button>${writable ? `<button type="button" data-act="edit" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline mr-3">Modifier</button><button type="button" data-act="delete" data-id="${escapeHtml(item.id)}" class="text-red-600 hover:underline">Supprimer</button>` : ''}</td>` : key === 'payments' ? `<td class="py-3 pr-2">${item.status === 'paye' ? `<button type="button" data-act="receipt" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline"><i class="fa-solid fa-file-pdf mr-1"></i>Reçu</button>` : ''}</td>` : key === 'grades' ? `<td class="py-3 pr-2 whitespace-nowrap">${item.status === 'saisie' && session.user.role === 'admin' ? `<button type="button" data-act="validate" data-id="${escapeHtml(item.id)}" class="text-emerald-700 hover:underline mr-3">Valider</button><button type="button" data-act="cancel" data-id="${escapeHtml(item.id)}" class="text-red-600 hover:underline">Annuler</button>` : ''}${item.status === 'validee' && writable ? `<button type="button" data-act="correct" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline">Corriger</button>` : ''}</td>` : ''}</tr>`).join('')
         : `<tr><td colspan="${colSpan}" class="py-8 text-center text-slate-400">Aucun enregistrement.</td></tr>`;
       if (key === 'payments') {
         tbody.onclick = async (ev) => {
           const btn = ev.target.closest('button[data-act=receipt]'); if (!btn) return;
           const item = data.find((x) => x.id === btn.dataset.id); if (!item) return;
           try { await downloadFile(`/api/payments/${encodeURIComponent(item.id)}/receipt.pdf`, `recu-${item.receipt_number || 'paiement'}.pdf`); } catch (e) { toast(e.message, 'err'); }
+        };
+      }
+      if (key === 'grades') {
+        tbody.onclick = async (ev) => {
+          const btn = ev.target.closest('button[data-act]'); if (!btn) return;
+          const item = data.find((x) => x.id === btn.dataset.id); if (!item) return;
+          try {
+            if (btn.dataset.act === 'correct') {
+              const sent = await formModal({ title: 'Demande de correction', fields: [{ name: 'score', label: 'Nouvelle note (sur 20)', type: 'number', required: true }, { name: 'reason', label: 'Motif (obligatoire)', required: true }], submit: 'Envoyer la demande', onSubmit: (v) => api('POST', `/api/grades/${encodeURIComponent(item.id)}/corrections`, v) });
+              if (sent) { toast('Demande envoyée à l’administrateur.'); refresh(); }
+              return;
+            }
+            if (btn.dataset.act === 'cancel') {
+              if (!await confirmDialog('Annuler la note', 'La note ne comptera plus dans les bulletins.')) return;
+              await api('POST', `/api/grades/${encodeURIComponent(item.id)}/cancel`);
+            } else {
+              await api('POST', `/api/grades/${encodeURIComponent(item.id)}/validate`);
+            }
+            toast('Note mise à jour.'); refresh();
+          } catch (e) { toast(e.message, 'err'); }
         };
       }
       if (key === 'students') {
@@ -805,6 +825,7 @@ async function openSettings() {
     <section class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-3">Mon compte</h3><p class="text-sm text-slate-500">${escapeHtml(session.user.email)} · ${escapeHtml(ROLE_LABELS[session.user.role] || session.user.role)}</p><button id="pwd-btn" class="mt-3 px-4 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700">Changer mon mot de passe</button></section>
     ${isAdmin ? bannerSectionHtml() + identitySectionHtml(false) + subscriptionSectionHtml() + permissionsSectionHtml() : ''}
     ${isAdmin ? `<section class="bg-white rounded-2xl border border-slate-200 p-5"><div class="flex items-center justify-between mb-3"><h3 class="font-bold">Périodes scolaires (trimestres)</h3><button id="period-add" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-2"></i>Ajouter</button></div><div id="periods-list" class="text-sm space-y-2"></div><p class="mt-3 text-xs text-slate-400">Les périodes servent à filtrer les bulletins.</p></section>
+    ${isAdmin ? `<section id="corrections-card" class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-3">Corrections de notes en attente</h3><div id="corrections-list" class="text-sm"></div></section>` : ''}
     <section class="bg-white rounded-2xl border border-slate-200 p-5"><div class="flex items-center justify-between mb-3"><h3 class="font-bold">Utilisateurs</h3><button id="user-add" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-2"></i>Ajouter</button></div>
       <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-xs text-slate-500 border-b"><th class="py-2 pr-3">Nom</th><th class="py-2 pr-3">E-mail</th><th class="py-2 pr-3">Rôle</th><th class="py-2 pr-3">Dernière connexion</th><th class="py-2 pr-3">Statut</th><th class="py-2"></th></tr></thead><tbody id="users-rows"></tbody></table></div>
       <p class="mt-3 text-xs text-slate-400">Un compte désactivé est déconnecté immédiatement. Un changement de rôle s’applique dès la requête suivante.</p></section>` : ''}`;
@@ -821,17 +842,48 @@ async function openSettings() {
     const ok = await formModal({ title: 'Nom de l’établissement', values: { name: tenant.name }, fields: [{ name: 'name', label: 'Nom', required: true }], onSubmit: async (v) => { tenant = (await api('PUT', '/api/settings', v)).data; } });
     if (ok) { $('tenant-name').textContent = tenant.name; toast('Établissement mis à jour.'); }
   });
+  async function loadCorrections() {
+    const box = $('corrections-list');
+    if (!box) return;
+    try {
+      const list = rows(await get('/api/grades/corrections'));
+      box.innerHTML = list.length ? list.map((c) => `<div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2"><span><strong>${escapeHtml(c.student_name)}</strong> · ${escapeHtml(c.subject)} : ${escapeHtml(String(c.old_score))} → <strong>${escapeHtml(String(c.new_score))}</strong> <span class="text-slate-500">par ${escapeHtml(c.requested_by_name)} — « ${escapeHtml(c.reason)} »</span></span><span class="flex gap-3"><button type="button" data-correction-approve="${escapeHtml(c.id)}" class="text-emerald-700 hover:underline">Approuver</button><button type="button" data-correction-reject="${escapeHtml(c.id)}" class="text-red-600 hover:underline">Refuser</button></span></div>`).join('') : '<p class="text-slate-400">Aucune demande en attente.</p>';
+    } catch (e) { box.innerHTML = `<p class="text-red-500">${escapeHtml(e.message)}</p>`; }
+  }
+  $('corrections-list').addEventListener('click', async (ev) => {
+    const ap = ev.target.closest('[data-correction-approve]');
+    const rj = ev.target.closest('[data-correction-reject]');
+    const b = ap || rj; if (!b) return;
+    const decision = ap ? 'approve' : 'reject';
+    const id = ap ? ap.dataset.correctionApprove : rj.dataset.correctionReject;
+    const ok = await formModal({ title: ap ? 'Approuver la correction' : 'Refuser la correction', fields: [{ name: 'reason', label: 'Motif (obligatoire)', required: true }], submit: ap ? 'Approuver' : 'Refuser', onSubmit: (v) => api('POST', `/api/grades/corrections/${encodeURIComponent(id)}/${decision}`, v) });
+    if (ok) { toast(ap ? 'Correction approuvée.' : 'Correction refusée.'); loadCorrections(); }
+  });
+  loadCorrections();
   async function loadPeriods() {
     const box = $('periods-list');
     try {
       const list = rows(await get('/api/periods?limit=50'));
-      box.innerHTML = list.length ? list.map((p) => `<div class="flex items-center justify-between border-b border-slate-100 pb-2"><span><strong>${escapeHtml(p.name)}</strong> <span class="text-slate-500">du ${displayDate(p.start_date)} au ${displayDate(p.end_date)}</span></span><button type="button" data-period-del="${escapeHtml(p.id)}" class="text-red-600 hover:underline">Supprimer</button></div>`).join('') : '<p class="text-slate-400">Aucune période définie.</p>';
+      box.innerHTML = list.length ? list.map((p) => `<div class="flex items-center justify-between border-b border-slate-100 pb-2"><span><strong>${escapeHtml(p.name)}</strong> <span class="text-slate-500">du ${displayDate(p.start_date)} au ${displayDate(p.end_date)}</span></span><span class="flex items-center gap-3">${p.closed_at ? `<span class="text-xs font-semibold text-amber-700">Clôturée</span><button type="button" data-period-reopen="${escapeHtml(p.id)}" class="text-blue-600 hover:underline">Rouvrir</button>` : `<button type="button" data-period-close="${escapeHtml(p.id)}" class="text-blue-600 hover:underline">Clôturer</button><button type="button" data-period-del="${escapeHtml(p.id)}" class="text-red-600 hover:underline">Supprimer</button>`}</span></div>`).join('') : '<p class="text-slate-400">Aucune période définie.</p>';
     } catch (e) { box.innerHTML = `<p class="text-red-500">${escapeHtml(e.message)}</p>`; }
   }
   $('period-add').addEventListener('click', async () => {
     if (await formModal({ title: 'Ajouter une période', fields: [{ name: 'name', label: 'Nom (ex. Trimestre 1)', required: true }, { name: 'start_date', label: 'Début', type: 'date', required: true }, { name: 'end_date', label: 'Fin', type: 'date', required: true }], onSubmit: (v) => api('POST', '/api/periods', v) })) { toast('Période ajoutée.'); loadPeriods(); }
   });
   $('periods-list').addEventListener('click', async (ev) => {
+    const close = ev.target.closest('[data-period-close]');
+    if (close) {
+      if (await confirmDialog('Clôturer la période', 'Les notes dont la date tombe dans cette période ne pourront plus être ajoutées ni validées.')) {
+        try { await api('POST', `/api/periods/${encodeURIComponent(close.dataset.periodClose)}/close`); toast('Période clôturée.'); loadPeriods(); } catch (e) { toast(e.message, 'err'); }
+      }
+      return;
+    }
+    const reopen = ev.target.closest('[data-period-reopen]');
+    if (reopen) {
+      const ok = await formModal({ title: 'Rouvrir la période', fields: [{ name: 'reason', label: 'Motif (obligatoire)', required: true }], submit: 'Rouvrir', onSubmit: (v) => api('POST', `/api/periods/${encodeURIComponent(reopen.dataset.periodReopen)}/reopen`, v) });
+      if (ok) { toast('Période rouverte.'); loadPeriods(); }
+      return;
+    }
     const b = ev.target.closest('[data-period-del]'); if (!b) return;
     if (await confirmDialog('Supprimer la période', 'Les notes ne sont pas affectées ; seul le filtre du bulletin disparaît.')) {
       try { await api('DELETE', `/api/periods/${encodeURIComponent(b.dataset.periodDel)}`); toast('Période supprimée.'); loadPeriods(); } catch (e) { toast(e.message, 'err'); }
