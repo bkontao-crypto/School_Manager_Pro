@@ -1,7 +1,8 @@
 // Permissions par module et par rôle (aucun, lecture, écriture), personnalisables par l'administrateur de chaque établissement.
 //
 //  - « admin » a toujours tous les droits (non configurable) : impossible de se verrouiller hors de son propre établissement ;
-//  - la matrice par défaut reproduit exactement le comportement historique ; seules les dérogations sont stockées ;
+//  - la matrice par défaut reprend le comportement historique, sauf les modules Paiements et RH (décisions D1 et D2 de la Phase 1) ;
+//  - seules les dérogations sont stockées ;
 //  - « écriture » inclut « lecture » ; la lecture d'un module est exigée sur toutes ses routes GET, l'écriture sur ses actions ;
 //  - les comptes, paramètres, identité et facturation de l'abonnement restent réservés à l'administrateur.
 
@@ -25,11 +26,17 @@ const DEFAULT_WRITE = {
   messages: MESSAGE_ROLES // tout le monde peut écrire dans la messagerie
 };
 const DEFAULT_READ_ONLY_ROLES = { reports: ['accountant'] }; // rapports : comptable seulement (en plus de l'administrateur)
+// Aucun accès par défaut hors administrateur (D1 : paiements sauf comptable ; D2 : RH réservées à l'administrateur).
+const DEFAULT_HIDDEN = {
+  payments: ['teacher', 'staff', 'user'],
+  hr: ['teacher', 'accountant', 'staff', 'user']
+};
 
 function defaultLevel(role, module) {
   if (role === 'admin') return 'write';
   if (role === 'parent') return 'none';
   if ((DEFAULT_WRITE[module] || []).includes(role)) return 'write';
+  if ((DEFAULT_HIDDEN[module] || []).includes(role)) return 'none';
   if (DEFAULT_READ_ONLY_ROLES[module]) return DEFAULT_READ_ONLY_ROLES[module].includes(role) ? 'read' : 'none';
   return 'read';
 }
