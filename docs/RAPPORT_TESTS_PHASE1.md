@@ -32,14 +32,23 @@ Bloc « Phase 1 : cycle des notes, corrections, périodes, rôle gérant, partic
 - messagerie : retrait d'un participant, accès coupé immédiatement, lecture marquée par le participant seulement ;
 - portail parent : une note en saisie n'apparaît pas, une note validée apparaît.
 
-## 3. Ce qui n'est pas vérifié
+## 3. Vérifications complémentaires (18/11/2026)
 
-- Parcours navigateur (tableau de bord, écrans de clôture et de corrections, mobile) : non exécuté.
+- **Sauvegarde et restauration** : `scripts/backup.js` puis `scripts/restore.js` sur la base de test, restauration dans une base vide. Comptes de lignes identiques sur users, students, grades, conversations, academic_periods, grade_corrections, role_permissions (0 ligne).
+- **Parcours navigateur** (Playwright, Chromium, serveur réel) :
+  - administrateur : tous les modules d'accès aux paiements, RH, messages, paramètres sont affichés ; aucune erreur JavaScript ;
+  - enseignant : paiements et RH absents du menu ;
+  - gérant : paiements et RH absents ; section Paramètres → Périodes avec « Rouvrir » sur période clôturée ; section Utilisateurs absente.
+  - Mobile 390 px : aucun débordement horizontal (scrollWidth = clientWidth).
+- **Correctif trouvé pendant ce parcours** : la section « Utilisateurs » s'affichait au gérant avec un bouton « Ajouter » qui échouait (l'API réserve /api/users à l'administrateur). Section retirée et gestionnaires désactivés pour les non-administrateurs (`frontend/app.js`).
+
+## 4. Ce qui n'est pas vérifié
+
+- Parcours navigateur complet : la validation et la correction de notes à l’écran, et le tableau de bord de chaque rôle, ne sont pas encore parcourus.
 - Mise à niveau depuis une copie de base réelle : non exécutée.
-- Sauvegarde et restauration : non exécutées.
 - Rendu visuel du bulletin : contrôlé une fois sur un PDF généré avec des données fictives ; le libellé de colonne « Notes » est à clarifier.
 
-## 4. Anomalies et limites restantes
+## 5. Anomalies et limites restantes
 
 1. **Demande de correction bloquée avec un seul administrateur.** Le demandeur ne peut pas décider sa propre demande, et aucune route ne permet de la retirer. Dans un établissement qui n'a qu'un administrateur, cette demande reste en attente indéfiniment, et elle bloque toute nouvelle demande sur la même note (index unique). Décision à prendre : ajouter un retrait par le demandeur, ou un décideur de secours (gérant).
 2. **Colonne « Notes » du bulletin** : elle affiche le nombre de notes validées, pas les notes. Libellé à renommer.
@@ -48,7 +57,7 @@ Bloc « Phase 1 : cycle des notes, corrections, périodes, rôle gérant, partic
 5. **Barèmes configurables** par établissement (§5.1) : non implémentés.
 6. **Environnement** : le proxy de la session exclut `registry.npmjs.org` du proxy, ce qui rend npm inutilisable par défaut. La commande d'installation a été lancée avec la liste `noProxy` vidée, uniquement pour cette commande. Ni `HTTPS_PROXY` ni la vérification TLS n'ont été modifiés.
 
-## 5. Commande de reproduction
+## 6. Commande de reproduction
 
 ```bash
 su postgres -c "createdb school_manager_pro_test"   # base dont le nom finit par _test

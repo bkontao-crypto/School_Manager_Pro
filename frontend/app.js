@@ -904,10 +904,12 @@ async function openSettings() {
       tbody.innerHTML = users.map((u) => `<tr class="border-b border-slate-100"><td class="py-2.5 pr-3">${escapeHtml(u.full_name)}</td><td class="py-2.5 pr-3">${escapeHtml(u.email)}</td><td class="py-2.5 pr-3">${escapeHtml(ROLE_LABELS[u.role] || u.role)}</td><td class="py-2.5 pr-3 text-slate-500">${u.last_login_at ? new Date(u.last_login_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : 'Jamais'}</td><td class="py-2.5 pr-3">${u.is_active ? '<span class="text-emerald-700">Actif</span>' : '<span class="text-slate-400">Désactivé</span>'}</td><td class="py-2.5 text-right whitespace-nowrap">${u.id === session.user.id ? '<span class="text-xs text-slate-400">Vous</span>' : `${u.role === 'parent' ? '' : `<button type="button" data-user-role="${escapeHtml(u.id)}" class="text-blue-600 hover:underline mr-3">Rôle</button>`}<button type="button" data-user-pwd="${escapeHtml(u.id)}" class="text-blue-600 hover:underline mr-3">Mot de passe</button><button type="button" data-user-toggle="${escapeHtml(u.id)}" class="${u.is_active ? 'text-red-600' : 'text-emerald-700'} hover:underline">${u.is_active ? 'Désactiver' : 'Réactiver'}</button>`}</td></tr>`).join('');
     } catch (e) { tbody.innerHTML = `<tr><td colspan="6" class="py-4 text-red-500">${escapeHtml(e.message)}</td></tr>`; }
   }
-  $('user-add').addEventListener('click', async () => {
+  // Comptes : réservés à l'administrateur (l'API refuse /api/users aux autres rôles) ; la section est retirée pour les autres.
+  if (!isAdmin) document.getElementById('users-rows')?.closest('section')?.remove();
+  if (isAdmin) $('user-add').addEventListener('click', async () => {
     if (await formModal({ title: 'Ajouter un utilisateur', fields: USER_FIELDS, onSubmit: (v) => api('POST', '/api/users', v) })) { toast('Utilisateur créé.'); loadUsers(); }
   });
-  $('users-rows').addEventListener('click', async (ev) => {
+  if (isAdmin) $('users-rows').addEventListener('click', async (ev) => {
     const r = ev.target.closest('[data-user-role]'), t = ev.target.closest('[data-user-toggle]'), w = ev.target.closest('[data-user-pwd]');
     const user = users.find((u) => u.id === (r ? r.dataset.userRole : w ? w.dataset.userPwd : t && t.dataset.userToggle)); if (!user) return;
     if (w) {
@@ -918,7 +920,7 @@ async function openSettings() {
       try { await api('PUT', `/api/users/${encodeURIComponent(user.id)}`, { is_active: !user.is_active }); toast('Compte mis à jour.'); loadUsers(); } catch (e) { toast(e.message, 'err'); }
     }
   });
-  await loadUsers();
+  if (isAdmin) await loadUsers();
 }
 
 // ---------------------------------------------------------------- Dossier individuel
