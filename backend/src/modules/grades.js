@@ -111,7 +111,7 @@ router.post('/:id/corrections', requireWrite('grades'), wrap(async (req, res) =>
 // Liste des demandes en attente (administrateur).
 router.get('/corrections', requireRole('admin'), wrap(async (req, res) => {
   const r = await db.query(
-    `SELECT c.id, c.grade_id, c.old_score, c.new_score, c.reason, c.created_at,
+    `SELECT c.id, c.grade_id, c.requested_by, c.old_score, c.new_score, c.reason, c.created_at,
             u.full_name AS requested_by_name, g.subject, g.evaluation_type, s.first_name || ' ' || s.last_name AS student_name
        FROM grade_corrections c
        JOIN grades g ON g.id = c.grade_id AND g.tenant_id = c.tenant_id
@@ -159,5 +159,26 @@ async function decideCorrection(req, res, decision) {
 
 router.post('/corrections/:cid/approve', requireRole('admin'), wrap((req, res) => decideCorrection(req, res, 'approved')));
 router.post('/corrections/:cid/reject', requireRole('admin'), wrap((req, res) => decideCorrection(req, res, 'rejected')));
+
+// Retrait par l'auteur de sa propre demande en attente (décision 1 : évite qu'une demande reste bloquée
+// quand l'administrateur est aussi son auteur). La décision est tracée avec motif, comme une décision d'administrateur.
+router.post('/corrections/:cid/withdraw', requireWrite('grades'), wrap(async (req, res) => {
+  if (!isUuid(req.params.cid)) throw new HttpError(400, 'Identifiant invalide.');
+  const reason = checkMotif(req.body && req.body.reason);
+  const r = await db.query(
+    `UPDATE grade_corrections SET status = 'withdrawn', decided_by = $3, decided_at = now(), decision_reason = $4
+      WHERE id = $1 AND tenant_id = $2 AND status = 'pending' AND requested_by = $3
+      RETURNING id, grade_id, status, old_score, new_score, decided_at`,
+    [req.params.cid, req.tenantId, req.user.id, reason]
+  );
+  if (!r.rows.length) {
+    const c = await db.query('SELECT status, requested_by FROM grade_corrections WHERE id = $1 AND tenant_id = $2', [req.params.cid, req.tenantId]);
+    if (!c.rows.length) throw new HttpError(404, 'Demande introuvable.');
+    if (c.rows[0].requested_by !== req.user.id) throw new HttpError(403, 'Seul le demandeur peut retirer sa demande.');
+    throw new HttpError(409, 'Cette demande n’est plus en attente.');
+  }
+  await audit(req, { action: 'grade.correction_withdraw', entity: 'grade', entityId: r.rows[0].grade_id, details: { correction_id: r.rows[0].id, reason } });
+  res.json({ data: r.rows[0] });
+}));
 
 module.exports = router;

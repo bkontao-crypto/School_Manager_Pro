@@ -26,7 +26,7 @@ function renderReportCard(data, schoolName) {
   const cols = [L + 4, L + 230, L + 285, R - 90, R - 4]; // matière, coef, notes, moyenne (droite), appréciation (droite)
   const head = () => {
     pdf.rect(L, y - 6, R - L, 22, { fill: 0.9 });
-    pdf.text(cols[0], y, 'Matière', { size: 10, bold: true }); pdf.text(cols[1], y, 'Coef.', { size: 10, bold: true }); pdf.text(cols[2], y, 'Notes', { size: 10, bold: true });
+    pdf.text(cols[0], y, 'Matière', { size: 10, bold: true }); pdf.text(cols[1], y, 'Coef.', { size: 10, bold: true }); pdf.text(cols[2], y, 'Nb notes', { size: 10, bold: true });
     pdf.text(cols[3], y, 'Moyenne /20', { size: 10, bold: true, align: 'right' }); pdf.text(cols[4], y, 'Appréciation', { size: 10, bold: true, align: 'right' });
     y -= 24;
   };

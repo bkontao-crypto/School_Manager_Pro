@@ -48,14 +48,20 @@ Bloc « Phase 1 : cycle des notes, corrections, périodes, rôle gérant, partic
 - Mise à niveau depuis une copie de base réelle : non exécutée.
 - Rendu visuel du bulletin : contrôlé une fois sur un PDF généré avec des données fictives ; le libellé de colonne « Notes » est à clarifier.
 
-## 5. Anomalies et limites restantes
+## 5. Traitement des anomalies
 
-1. **Demande de correction bloquée avec un seul administrateur.** Le demandeur ne peut pas décider sa propre demande, et aucune route ne permet de la retirer. Dans un établissement qui n'a qu'un administrateur, cette demande reste en attente indéfiniment, et elle bloque toute nouvelle demande sur la même note (index unique). Décision à prendre : ajouter un retrait par le demandeur, ou un décideur de secours (gérant).
-2. **Colonne « Notes » du bulletin** : elle affiche le nombre de notes validées, pas les notes. Libellé à renommer.
-3. **Accusés de réception et de lecture** (§4.1 point 6) : non implémentés. Seule la date de dernière lecture existe.
-4. **Statuts des notes** : `saisie / validee / annulee` au lieu de `draft / submitted / approved / published` demandés par l'ordonnance (§4.5). Décision à prendre.
-5. **Barèmes configurables** par établissement (§5.1) : non implémentés.
-6. **Environnement** : le proxy de la session exclut `registry.npmjs.org` du proxy, ce qui rend npm inutilisable par défaut. La commande d'installation a été lancée avec la liste `noProxy` vidée, uniquement pour cette commande. Ni `HTTPS_PROXY` ni la vérification TLS n'ont été modifiés.
+Résolues dans cette livraison :
+1. **Demande de correction bloquée (administrateur unique)** : retrait par l'auteur (décision D4, route `withdraw`, testé).
+2. **Libellé « Notes » du bulletin** : renommé « Nb notes » (D9).
+3. **Stockage des documents (§4.4)** : téléversement réel (PDF, PNG, JPEG), contrôle de la signature du fichier et de l'extension, limite de taille (`DOCUMENT_MAX_MB`, 10 Mo par défaut), nom de stockage aléatoire, dossier privé (`DOCUMENTS_DIR`), téléchargement authentifié avec en-tête `nosniff`, brouillons réservés aux rédacteurs, journalisation (D6). Testé : 95/95 en intégration, et téléversement vérifié dans le navigateur.
+
+Restent ouvertes :
+- **Retrait de demande à l'écran** : disponible pour l'administrateur (liste des corrections dans Paramètres) ; pas encore d'écran pour l'enseignant, qui peut le faire par API seulement.
+- **Documents** : pas d'analyse antivirus (service indisponible ici), pas de versions (un document ne reçoit qu'un fichier), pas de rattachement par classe pour la lecture, la liste reste visible à tous les lecteurs du module.
+- **Accusés de réception et de lecture** (§4.1 point 6) : non implémentés.
+- **Statuts des notes** : conservés tels quels (D5).
+- **Barèmes configurables par établissement** (§5.1) : non implémentés.
+- **Environnement** : le proxy exclut `registry.npmjs.org` du relais. Les commandes npm ont été lancées avec la liste `noProxy` vidée, uniquement pour ces commandes. `HTTPS_PROXY` et la vérification TLS n'ont pas été modifiés.
 
 ## 6. Commande de reproduction
 

@@ -25,6 +25,8 @@ if (!TEST_URL) {
     throw new Error(`Refus : la base de test doit se terminer par "_test" (reçu : "${dbName}").`);
   }
   process.env.DATABASE_URL = TEST_URL;
+  // Stockage des documents : dossier temporaire propre à cette exécution (jamais le dossier réel).
+  process.env.DOCUMENTS_DIR = require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'smp-docs-test-'));
 
   const { Pool } = require('pg');
   const { createApp } = require('../../backend/src/index');
@@ -1474,14 +1476,18 @@ if (!TEST_URL) {
         assert.equal(rejected.status, 201);
         assert.equal((await api('POST', `/api/grades/corrections/${rejected.json.data.id}/reject`, { token: tokens.adminA, body: { reason: 'Pas de preuve' } })).status, 200);
         assert.equal(await scoreOf(grade), 14, 'un rejet ne modifie pas la note');
-        // Demande de l'administrateur lui-même : il ne peut pas la décider. (Limite connue : avec un seul administrateur,
-        // cette demande reste en attente ; voir docs/RAPPORT_TESTS_PHASE1.md.)
+        // Demande de l'administrateur lui-même : il ne peut pas la décider, mais il peut la retirer (décision 1).
         const own = await api('POST', `/api/grades/${grade}/corrections`, { token: tokens.adminA, body: { score: 15, reason: 'Correction admin' } });
         assert.equal(own.status, 201);
         const cid = own.json.data.id;
         assert.equal((await api('POST', `/api/grades/corrections/${cid}/approve`, { token: tokens.adminA, body: { reason: 'Moi-même' } })).status, 403);
         assert.equal((await api('POST', `/api/grades/corrections/${cid}/reject`, { token: tokens.adminA, body: { reason: 'Non justifié' } })).status, 403);
         assert.equal(await scoreOf(grade), 14);
+        assert.equal((await api('POST', `/api/grades/corrections/${cid}/withdraw`, { token: tokens.teacherA, body: { reason: 'Pas le mien' } })).status, 403);
+        assert.equal((await api('POST', `/api/grades/corrections/${cid}/withdraw`, { token: tokens.adminA, body: { reason: 'Je retire' } })).status, 200);
+        assert.equal((await api('POST', `/api/grades/corrections/${cid}/withdraw`, { token: tokens.adminA, body: { reason: 'Encore' } })).status, 409);
+        assert.equal((await api('POST', `/api/grades/corrections/${cid}/approve`, { token: tokens.adminA, body: { reason: 'Trop tard' } })).status, 409);
+        assert.equal(await scoreOf(grade), 14, 'un retrait ne modifie pas la note');
       });
 
       it('une note non validée ne se corrige pas par cette procédure', async () => {
@@ -1534,6 +1540,74 @@ if (!TEST_URL) {
         assert.equal(thread.json.data.length, 0);
         assert.equal((await api('POST', '/api/messages/messages', { token: tokens.userA, body: { conversation_id: c, content: 'Toujours là ?' } })).status, 404);
         assert.equal((await api('DELETE', `/api/messages/conversations/${c}/participants/${userId}`, { token: tokens.adminA })).status, 404);
+      });
+    });
+
+    describe('Documents : téléversement contrôlé, stockage privé, téléchargement authentifié (§4.4)', () => {
+      const PDF = Buffer.from('%PDF-1.4\n1 0 obj << >> endobj\n%%EOF\n');
+      const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('donnees')]);
+      const upload = (id, token, name, content, type) => {
+        const fd = new FormData();
+        fd.append('file', new Blob([content], { type: type || 'application/octet-stream' }), name);
+        return fetch(`${base}/api/documents/${id}/file`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
+      };
+      const download = (id, token) => fetch(`${base}/api/documents/${id}/file`, { headers: { Authorization: `Bearer ${token}` } });
+      const mkDoc = async (body, token = tokens.adminA) => (await api('POST', '/api/documents', { token, body: { title: 'Doc', status: 'publie', ...body } })).json.data.id;
+      let pub; let draft;
+
+      before(async () => { pub = await mkDoc({ title: 'Règlement intérieur' }); draft = await mkDoc({ title: 'Brouillon', status: 'brouillon' }); });
+
+      it('téléversement PDF valide : 201, nom d’origine conservé, nom de stockage aléatoire, pas de second fichier', async () => {
+        const r = await upload(pub, tokens.adminA, 'reglement.pdf', PDF, 'application/pdf');
+        assert.equal(r.status, 201);
+        const body = await r.json();
+        assert.equal(body.data.original_name, 'reglement.pdf');
+        assert.equal(body.data.storage_name, undefined, 'le nom de stockage ne sort pas de l’API');
+        assert.equal((await upload(pub, tokens.adminA, 'autre.pdf', PDF, 'application/pdf')).status, 409);
+        const files = require('node:fs').readdirSync(process.env.DOCUMENTS_DIR);
+        assert.equal(files.length, 1);
+        assert.match(files[0], /^[a-f0-9]{48}\.bin$/);
+        assert.ok(!files[0].includes('reglement'));
+      });
+
+      it('refuse un contenu qui ne correspond pas à l’extension ou au type, un type inconnu et un fichier trop gros', async () => {
+        const d = await mkDoc({ title: 'Refus' });
+        assert.equal((await upload(d, tokens.adminA, 'faux.pdf', Buffer.from('texte simple'), 'application/pdf')).status, 415);
+        assert.equal((await upload(d, tokens.adminA, 'script.exe', PDF, 'application/pdf')).status, 415);
+        assert.equal((await upload(d, tokens.adminA, 'page.html', Buffer.from('<script>x</script>'), 'text/html')).status, 415);
+        assert.equal((await upload(d, tokens.adminA, 'grand.pdf', Buffer.concat([PDF, Buffer.alloc(11 * 1024 * 1024)]), 'application/pdf')).status, 413);
+        assert.equal((await upload(d, tokens.adminA, 'image.png', PNG, 'image/png')).status, 201, 'PNG accepté');
+      });
+
+      it('droits : enseignant peut joindre, utilisateur simple non ; document introuvable dans un autre établissement', async () => {
+        const d = await mkDoc({ title: 'Par enseignant' }, tokens.teacherA);
+        assert.equal((await upload(d, tokens.userA, 'x.pdf', PDF, 'application/pdf')).status, 403);
+        assert.equal((await upload(d, tokens.teacherA, 'x.pdf', PDF, 'application/pdf')).status, 201);
+        assert.equal((await upload(pub, tokens.adminB, 'x.pdf', PDF, 'application/pdf')).status, 404);
+        assert.equal((await download(pub, tokens.adminB)).status, 404);
+      });
+
+      it('téléchargement : contenu exact, en pièce jointe, sans détection de type par le navigateur ; brouillon réservé aux rédacteurs', async () => {
+        const r = await download(pub, tokens.userA);
+        assert.equal(r.status, 200);
+        assert.equal(r.headers.get('content-type'), 'application/pdf');
+        assert.equal(r.headers.get('x-content-type-options'), 'nosniff');
+        assert.match(r.headers.get('content-disposition'), /^attachment; filename\*=UTF-8''reglement\.pdf$/);
+        assert.deepEqual(Buffer.from(await r.arrayBuffer()), PDF);
+        assert.equal((await upload(draft, tokens.adminA, 'projet.pdf', PDF, 'application/pdf')).status, 201);
+        assert.equal((await download(draft, tokens.userA)).status, 404);
+        assert.equal((await download(draft, tokens.teacherA)).status, 200);
+        assert.equal((await download('pas-un-uuid', tokens.adminA)).status, 400);
+      });
+
+      it('la liste n’expose ni chemin ni nom de stockage ; téléversements et téléchargements sont journalisés', async () => {
+        const list = await api('GET', '/api/documents?limit=50', { token: tokens.adminA });
+        const item = list.json.data.find((x) => x.id === pub);
+        assert.equal(item.original_name, 'reglement.pdf');
+        assert.equal(item.file_path, undefined);
+        assert.equal(item.storage_name, undefined);
+        const aud = (await pool.query(`SELECT count(*)::int AS n FROM audit_logs WHERE tenant_id = $1 AND action IN ('document.upload', 'document.download')`, [TA])).rows[0].n;
+        assert.ok(aud >= 3);
       });
     });
 

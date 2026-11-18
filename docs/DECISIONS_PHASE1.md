@@ -30,3 +30,14 @@ Trois choix changent le comportement de l'application. Je ne les ai pas tranché
 **Choix attendu :** A, B ou C.
 
 Une réponse sur ces trois points suffit pour que je poursuive la Phase 1 avec les tests négatifs prévus.
+
+## Décisions acceptées (18/11/2026)
+
+- **D4 — Demande de correction bloquée (administrateur unique)** : retrait par l'auteur, route `POST /api/grades/corrections/:cid/withdraw`, statut `withdrawn` (migration 030). Pas de décideur de secours. Décision tracée avec motif.
+- **D5 — Statuts des notes** : conserver `saisie`, `validee`, `annulee`. Pas d'étape « soumise » pour l'instant.
+- **D6 — Stockage des documents** : dossier privé persistant (`DOCUMENTS_DIR`), accès uniquement par route authentifiée. Stockage objet en production plus tard. Dépendance `multer` 2.5.0 (publiée le 22/10/2026) acceptée.
+- **D7 — Rôle élève** : reporté à la Phase 5 (accès en lecture seule, règles de protection des mineurs).
+- **D8 — Messagerie des parents** : exclusion confirmée jusqu'à la Phase 5.
+- **D9 — Libellé du bulletin** : « Nb notes » au lieu de « Notes ».
+- **D10 — Fusion dans `main`** : non effectuée. Elle sera proposée après la recette navigateur complète.
+- **D11 — Anciennes branches distantes** : suppression manuelle par le propriétaire du dépôt.

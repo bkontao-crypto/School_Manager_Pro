@@ -513,8 +513,8 @@ const MODULES = {
     columns: [['last_name', 'Nom'], ['first_name', 'Prénom'], ['position', 'Fonction'], ['department', 'Service'], ['hire_date', 'Embauche', displayDate], ['status', 'Statut', label]] },
   documents: { title: 'Documents', endpoint: '/api/documents', writeRoles: ['admin', 'teacher'],
     fields: [{ name: 'title', label: 'Titre', required: true }, { name: 'type', label: 'Type (cours, circulaire, bulletin…)' }, { name: 'class_id', label: 'Classe concernée', type: 'class', clearable: true },
-      { name: 'file_path', label: 'Référence ou emplacement du fichier' }, { name: 'status', label: 'Statut', type: 'select', options: [['brouillon', 'Brouillon'], ['publie', 'Publié'], ['archive', 'Archivé']] }],
-    columns: [['title', 'Titre'], ['type', 'Type'], ['file_path', 'Fichier'], ['status', 'Statut', (v) => ({ brouillon: 'Brouillon', publie: 'Publié', archive: 'Archivé' }[v] || v)], ['created_at', 'Création', displayDate]] },
+      { name: 'status', label: 'Statut', type: 'select', options: [['brouillon', 'Brouillon'], ['publie', 'Publié'], ['archive', 'Archivé']] }],
+    columns: [['title', 'Titre'], ['type', 'Type'], ['original_name', 'Fichier', (v) => v || 'Aucun fichier joint'], ['status', 'Statut', (v) => ({ brouillon: 'Brouillon', publie: 'Publié', archive: 'Archivé' }[v] || v)], ['created_at', 'Création', displayDate]] },
   stocks: { title: 'Stocks', endpoint: '/api/stocks', writeRoles: ADMIN,
     fields: [{ name: 'name', label: 'Article', required: true }, { name: 'category', label: 'Catégorie' }, { name: 'quantity', label: 'Quantité', type: 'number' }, { name: 'unit', label: 'Unité (boîte, ramette…)' }, { name: 'threshold', label: 'Seuil d’alerte', type: 'number' }],
     columns: [['name', 'Article'], ['category', 'Catégorie'], ['quantity', 'Quantité', fmtNumber], ['unit', 'Unité'], ['threshold', 'Seuil', fmtNumber], ['status', 'Statut', label]] },
@@ -548,11 +548,11 @@ async function openModule(key, opts = {}) {
     ${cfg.endpoint && EXPORTABLE[key] ? '<button id="module-export" class="px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 text-sm font-semibold"><i class="fa-solid fa-file-excel mr-2"></i>Exporter</button>' : ''}
     ${writable ? '<button id="module-add" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-2"></i>Ajouter</button>' : ''}</div></div>
     <section class="bg-white rounded-2xl border border-slate-200 p-5"><div class="flex justify-between items-center mb-4"><h3 class="font-bold">Liste</h3><span id="module-count" class="text-xs text-slate-500">Chargement…</span></div>
-    <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-xs text-slate-500 border-b">${cfg.columns.map((c) => `<th class="py-3 pr-4">${c[1]}</th>`).join('')}${key === 'students' && writable ? '<th class="py-3 pr-2">Actions</th>' : key === 'students' ? '<th class="py-3 pr-2">Dossier</th>' : key === 'payments' ? '<th class="py-3 pr-2">PDF</th>' : key === 'grades' ? '<th class="py-3 pr-2">Actions</th>' : ''}</tr></thead>
+    <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-xs text-slate-500 border-b">${cfg.columns.map((c) => `<th class="py-3 pr-4">${c[1]}</th>`).join('')}${key === 'students' && writable ? '<th class="py-3 pr-2">Actions</th>' : key === 'students' ? '<th class="py-3 pr-2">Dossier</th>' : key === 'payments' ? '<th class="py-3 pr-2">PDF</th>' : key === 'documents' ? '<th class="py-3 pr-2">Action</th>' : key === 'grades' ? '<th class="py-3 pr-2">Actions</th>' : ''}</tr></thead>
     <tbody id="module-rows"></tbody></table></div>
     <div class="flex items-center justify-between mt-4"><button id="page-prev" class="text-sm text-blue-600 disabled:text-slate-300">← Précédent</button><span id="page-info" class="text-xs text-slate-500"></span><button id="page-next" class="text-sm text-blue-600 disabled:text-slate-300">Suivant →</button></div>
     <p id="module-error" class="text-sm text-red-600 mt-3" role="alert"></p></section>`;
-  const colSpan = cfg.columns.length + (key === 'students' || key === 'payments' || key === 'grades' ? 1 : 0);
+  const colSpan = cfg.columns.length + (key === 'students' || key === 'payments' || key === 'grades' || key === 'documents' ? 1 : 0);
 
   async function refresh() {
     const tbody = $('module-rows'), count = $('module-count'), err = $('module-error');
@@ -566,13 +566,35 @@ async function openModule(key, opts = {}) {
       $('page-prev').disabled = listState.offset === 0;
       $('page-next').disabled = listState.offset + data.length >= total;
       tbody.innerHTML = data.length ? data.map((item) => `<tr class="border-b border-slate-100 hover:bg-slate-50">${cfg.columns.map(([k, , fmt]) => `<td class="py-3 pr-4 text-slate-700">${renderCell(item[k], fmt)}</td>`).join('')}${key === 'students'
-        ? `<td class="py-3 pr-2 whitespace-nowrap"><button type="button" data-act="profile" data-id="${escapeHtml(item.id)}" class="text-emerald-700 hover:underline mr-3">Dossier</button>${writable ? `<button type="button" data-act="edit" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline mr-3">Modifier</button><button type="button" data-act="delete" data-id="${escapeHtml(item.id)}" class="text-red-600 hover:underline">Supprimer</button>` : ''}</td>` : key === 'payments' ? `<td class="py-3 pr-2">${item.status === 'paye' ? `<button type="button" data-act="receipt" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline"><i class="fa-solid fa-file-pdf mr-1"></i>Reçu</button>` : ''}</td>` : key === 'grades' ? `<td class="py-3 pr-2 whitespace-nowrap">${item.status === 'saisie' && session.user.role === 'admin' ? `<button type="button" data-act="validate" data-id="${escapeHtml(item.id)}" class="text-emerald-700 hover:underline mr-3">Valider</button><button type="button" data-act="cancel" data-id="${escapeHtml(item.id)}" class="text-red-600 hover:underline">Annuler</button>` : ''}${item.status === 'validee' && writable ? `<button type="button" data-act="correct" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline">Corriger</button>` : ''}</td>` : ''}</tr>`).join('')
+        ? `<td class="py-3 pr-2 whitespace-nowrap"><button type="button" data-act="profile" data-id="${escapeHtml(item.id)}" class="text-emerald-700 hover:underline mr-3">Dossier</button>${writable ? `<button type="button" data-act="edit" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline mr-3">Modifier</button><button type="button" data-act="delete" data-id="${escapeHtml(item.id)}" class="text-red-600 hover:underline">Supprimer</button>` : ''}</td>` : key === 'payments' ? `<td class="py-3 pr-2">${item.status === 'paye' ? `<button type="button" data-act="receipt" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline"><i class="fa-solid fa-file-pdf mr-1"></i>Reçu</button>` : ''}</td>` : key === 'documents' ? `<td class="py-3 pr-2 whitespace-nowrap">${item.original_name ? `<button type="button" data-act="download" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline mr-3">Télécharger</button>` : ''}${writable && !item.original_name ? `<button type="button" data-act="upload" data-id="${escapeHtml(item.id)}" class="text-emerald-700 hover:underline">Joindre un fichier</button>` : ''}</td>` : key === 'grades' ? `<td class="py-3 pr-2 whitespace-nowrap">${item.status === 'saisie' && session.user.role === 'admin' ? `<button type="button" data-act="validate" data-id="${escapeHtml(item.id)}" class="text-emerald-700 hover:underline mr-3">Valider</button><button type="button" data-act="cancel" data-id="${escapeHtml(item.id)}" class="text-red-600 hover:underline">Annuler</button>` : ''}${item.status === 'validee' && writable ? `<button type="button" data-act="correct" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline">Corriger</button>` : ''}</td>` : ''}</tr>`).join('')
         : `<tr><td colspan="${colSpan}" class="py-8 text-center text-slate-400">Aucun enregistrement.</td></tr>`;
       if (key === 'payments') {
         tbody.onclick = async (ev) => {
           const btn = ev.target.closest('button[data-act=receipt]'); if (!btn) return;
           const item = data.find((x) => x.id === btn.dataset.id); if (!item) return;
           try { await downloadFile(`/api/payments/${encodeURIComponent(item.id)}/receipt.pdf`, `recu-${item.receipt_number || 'paiement'}.pdf`); } catch (e) { toast(e.message, 'err'); }
+        };
+      }
+      if (key === 'documents') {
+        tbody.onclick = async (ev) => {
+          const btn = ev.target.closest('button[data-act]'); if (!btn) return;
+          const item = data.find((x) => x.id === btn.dataset.id); if (!item) return;
+          if (btn.dataset.act === 'download') {
+            try { await downloadFile(`/api/documents/${encodeURIComponent(item.id)}/file`, item.original_name || 'document'); } catch (e) { toast(e.message, 'err'); }
+            return;
+          }
+          const input = document.createElement('input'); input.type = 'file'; input.accept = '.pdf,.png,.jpg,.jpeg';
+          input.onchange = async () => {
+            const f = input.files[0]; if (!f) return;
+            const fd = new FormData(); fd.append('file', f);
+            try {
+              const res = await fetch(`/api/documents/${encodeURIComponent(item.id)}/file`, { method: 'POST', headers: authHeaders(), body: fd });
+              const d = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(d.error || `Erreur ${res.status}`);
+              toast('Fichier joint.'); refresh();
+            } catch (e) { toast(e.message, 'err'); }
+          };
+          input.click();
         };
       }
       if (key === 'grades') {
@@ -850,12 +872,18 @@ async function openSettings() {
     if (!box) return;
     try {
       const list = rows(await get('/api/grades/corrections'));
-      box.innerHTML = list.length ? list.map((c) => `<div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2"><span><strong>${escapeHtml(c.student_name)}</strong> · ${escapeHtml(c.subject)} : ${escapeHtml(String(c.old_score))} → <strong>${escapeHtml(String(c.new_score))}</strong> <span class="text-slate-500">par ${escapeHtml(c.requested_by_name)} — « ${escapeHtml(c.reason)} »</span></span><span class="flex gap-3"><button type="button" data-correction-approve="${escapeHtml(c.id)}" class="text-emerald-700 hover:underline">Approuver</button><button type="button" data-correction-reject="${escapeHtml(c.id)}" class="text-red-600 hover:underline">Refuser</button></span></div>`).join('') : '<p class="text-slate-400">Aucune demande en attente.</p>';
+      box.innerHTML = list.length ? list.map((c) => `<div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2"><span><strong>${escapeHtml(c.student_name)}</strong> · ${escapeHtml(c.subject)} : ${escapeHtml(String(c.old_score))} → <strong>${escapeHtml(String(c.new_score))}</strong> <span class="text-slate-500">par ${escapeHtml(c.requested_by_name)} — « ${escapeHtml(c.reason)} »</span></span><span class="flex gap-3">${c.requested_by === session.user.id ? `<button type="button" data-correction-withdraw="${escapeHtml(c.id)}" class="text-slate-600 hover:underline">Retirer ma demande</button>` : `<button type="button" data-correction-approve="${escapeHtml(c.id)}" class="text-emerald-700 hover:underline">Approuver</button><button type="button" data-correction-reject="${escapeHtml(c.id)}" class="text-red-600 hover:underline">Refuser</button>`}</span></div>`).join('') : '<p class="text-slate-400">Aucune demande en attente.</p>';
     } catch (e) { box.innerHTML = `<p class="text-red-500">${escapeHtml(e.message)}</p>`; }
   }
   if ($('corrections-list')) $('corrections-list').addEventListener('click', async (ev) => {
     const ap = ev.target.closest('[data-correction-approve]');
     const rj = ev.target.closest('[data-correction-reject]');
+    const wd = ev.target.closest('[data-correction-withdraw]');
+    if (wd) {
+      const done = await formModal({ title: 'Retirer ma demande de correction', fields: [{ name: 'reason', label: 'Motif (obligatoire)', required: true }], submit: 'Retirer', onSubmit: (v) => api('POST', `/api/grades/corrections/${encodeURIComponent(wd.dataset.correctionWithdraw)}/withdraw`, v) });
+      if (done) { toast('Demande retirée.'); loadCorrections(); }
+      return;
+    }
     const b = ap || rj; if (!b) return;
     const decision = ap ? 'approve' : 'reject';
     const id = ap ? ap.dataset.correctionApprove : rj.dataset.correctionReject;
