@@ -678,15 +678,25 @@ async function openMessages(opts = {}) {
         : '<p class="p-3 text-slate-400">Aucune conversation. Créez la première.</p>';
     } catch (e) { $('conv-list').innerHTML = `<p class="p-3 text-red-500">${escapeHtml(e.message)}</p>`; }
   }
+  // Accusés (ordonnance §4.1) : compteurs seulement, jamais l'identité des lecteurs.
+  function receiptLabel(m) {
+    if (!m.recipients_count) return 'Envoyé';
+    return m.read_count >= m.recipients_count ? 'Lu par tous' : `Lu par ${m.read_count} sur ${m.recipients_count}`;
+  }
   async function loadThread() {
     if (!msgState.conversationId) return;
     try {
       const list = rows(await get(`/api/messages/messages?conversation_id=${encodeURIComponent(msgState.conversationId)}&limit=100`)).reverse();
       $('thread').innerHTML = list.length ? list.map((m) => {
         const mine = session.user && m.sender_id === session.user.id;
-        return `<div class="flex ${mine ? 'justify-end' : 'justify-start'}"><div class="max-w-[80%] rounded-2xl px-3.5 py-2 ${mine ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-800'}"><p class="text-[11px] ${mine ? 'text-blue-100' : 'text-slate-500'}">${escapeHtml(m.sender_name || 'Utilisateur')} · ${new Date(m.sent_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</p><p class="whitespace-pre-wrap break-words">${escapeHtml(m.content)}</p></div></div>`;
+        return `<div class="flex ${mine ? 'justify-end' : 'justify-start'}"><div class="max-w-[80%] rounded-2xl px-3.5 py-2 ${mine ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-800'}"><p class="text-[11px] ${mine ? 'text-blue-100' : 'text-slate-500'}">${escapeHtml(m.sender_name || 'Utilisateur')} · ${new Date(m.sent_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</p><p class="whitespace-pre-wrap break-words">${escapeHtml(m.content)}</p>${mine ? `<p class="text-[11px] text-blue-100 mt-1">${receiptLabel(m)}</p>` : ''}</div></div>`;
       }).join('') : '<p class="text-slate-400">Aucun message. Écrivez le premier.</p>';
       $('thread').scrollTop = $('thread').scrollHeight;
+      // Le destinataire accuse réception puis lecture de la conversation affichée (échecs silencieux : pas de droit = pas d'accusé).
+      if (list.some((m) => m.sender_id !== (session.user && session.user.id))) {
+        const base = `/api/messages/conversations/${encodeURIComponent(msgState.conversationId)}`;
+        api('POST', `${base}/receive`).then(() => api('POST', `${base}/read`)).catch(() => {});
+      }
     } catch (e) { $('thread').innerHTML = `<p class="text-red-500">${escapeHtml(e.message)}</p>`; }
   }
   async function select(id, title) {

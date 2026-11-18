@@ -53,7 +53,9 @@ router.use('/messages', makeResource({
   table: 'messages',
   from: 'messages m LEFT JOIN users u ON u.id = m.sender_id',
   tenantCol: 'm.tenant_id',
-  select: 'm.id, m.conversation_id, m.sender_id, u.full_name AS sender_name, m.content, m.status, m.sent_at',
+  select: `m.id, m.conversation_id, m.sender_id, u.full_name AS sender_name, m.content, m.status, m.sent_at,
+           (SELECT count(*) FROM message_receipts r WHERE r.message_id = m.id)::int AS recipients_count,
+           (SELECT count(*) FROM message_receipts r WHERE r.message_id = m.id AND r.read_at IS NOT NULL)::int AS read_count`,
   orderBy: 'm.sent_at DESC',
   filters: { conversation_id: { type: 'uuid', column: 'm.conversation_id' } },
   requireFilters: ['conversation_id'],
@@ -73,11 +75,21 @@ router.use('/messages', makeResource({
       );
       if (!member.rows.length) throw new HttpError(404, 'Conversation introuvable.');
     }
-    const result = await db.query(
-      'INSERT INTO messages (tenant_id, conversation_id, sender_id, content) VALUES ($1, $2, $3, $4) RETURNING *',
-      [req.tenantId, all.conversation_id, req.user.id, all.content]
-    );
-    return result.rows[0];
+    // Message et accusés en attente (un par destinataire présent à l'envoi) : une seule transaction.
+    return db.withTransaction(async (client) => {
+      const result = await client.query(
+        'INSERT INTO messages (tenant_id, conversation_id, sender_id, content) VALUES ($1, $2, $3, $4) RETURNING *',
+        [req.tenantId, all.conversation_id, req.user.id, all.content]
+      );
+      const msg = result.rows[0];
+      await client.query(
+        `INSERT INTO message_receipts (tenant_id, message_id, user_id)
+         SELECT tenant_id, $1, user_id FROM conversation_participants
+          WHERE conversation_id = $2 AND tenant_id = $3 AND user_id <> $4`,
+        [msg.id, all.conversation_id, req.tenantId, req.user.id]
+      );
+      return msg;
+    });
   },
   module: 'messages'
 }));
@@ -159,7 +171,30 @@ router.post('/conversations/:id/read', checkUuid('id'), wrap(async (req, res) =>
     [req.params.id, req.tenantId, req.user.id]
   );
   if (!r.rows.length) throw new HttpError(404, 'Conversation introuvable.');
-  res.json({ data: { conversation_id: req.params.id, last_read_at: r.rows[0].last_read_at } });
+  // Lecture : marque lus les messages reçus dans la conversation (l'expéditeur n'a pas d'accusé sur ses propres messages).
+  const rec = await db.query(
+    `UPDATE message_receipts r SET read_at = now(), delivered_at = COALESCE(r.delivered_at, now())
+       FROM messages m
+      WHERE m.id = r.message_id AND m.tenant_id = r.tenant_id AND m.conversation_id = $1
+        AND r.tenant_id = $2 AND r.user_id = $3 AND r.read_at IS NULL
+      RETURNING r.message_id`,
+    [req.params.id, req.tenantId, req.user.id]
+  );
+  res.json({ data: { conversation_id: req.params.id, last_read_at: r.rows[0].last_read_at, marked: rec.rows.length } });
+}));
+
+// Réception : le destinataire a reçu la conversation (accusé de réception, distinct de la lecture).
+router.post('/conversations/:id/receive', checkUuid('id'), wrap(async (req, res) => {
+  await requireVisible(req, req.params.id);
+  const r = await db.query(
+    `UPDATE message_receipts r SET delivered_at = now()
+       FROM messages m
+      WHERE m.id = r.message_id AND m.tenant_id = r.tenant_id AND m.conversation_id = $1
+        AND r.tenant_id = $2 AND r.user_id = $3 AND r.delivered_at IS NULL
+      RETURNING r.message_id`,
+    [req.params.id, req.tenantId, req.user.id]
+  );
+  res.json({ data: { conversation_id: req.params.id, delivered: r.rows.length } });
 }));
 
 module.exports = router;

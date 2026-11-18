@@ -1545,6 +1545,51 @@ if (!TEST_URL) {
       });
     });
 
+    describe('Accusés de réception et de lecture (§4.1 point 6)', () => {
+      let conv; let msg; let teacherId; let userId;
+      const summary = async () => (await api('GET', `/api/messages/messages?conversation_id=${conv}`, { token: tokens.adminA })).json.data.find((m) => m.id === msg);
+
+      before(async () => {
+        conv = (await api('POST', '/api/messages/conversations', { token: tokens.adminA, body: { title: 'Accusés', type: 'group' } })).json.data.id;
+        teacherId = (await api('GET', '/api/auth/me', { token: tokens.teacherA })).json.data.id;
+        userId = (await api('GET', '/api/auth/me', { token: tokens.userA })).json.data.id;
+        await api('POST', `/api/messages/conversations/${conv}/participants`, { token: tokens.adminA, body: { user_id: teacherId } });
+        await api('POST', `/api/messages/conversations/${conv}/participants`, { token: tokens.adminA, body: { user_id: userId } });
+        msg = (await api('POST', '/api/messages/messages', { token: tokens.adminA, body: { conversation_id: conv, content: 'Réunion jeudi' } })).json.data.id;
+      });
+
+      it('à l’envoi : un accusé en attente par destinataire, expéditeur seulement en compteurs', async () => {
+        const m = await summary();
+        assert.equal(m.recipients_count, 2);
+        assert.equal(m.read_count, 0);
+      });
+
+      it('réception puis lecture par chaque destinataire ; compteurs mis à jour ; expéditeur sans accusé sur son propre message', async () => {
+        assert.equal((await api('POST', `/api/messages/conversations/${conv}/receive`, { token: tokens.teacherA })).json.data.delivered, 1);
+        assert.equal((await summary()).read_count, 0, 'réception ≠ lecture');
+        const read = await api('POST', `/api/messages/conversations/${conv}/read`, { token: tokens.userA });
+        assert.equal(read.status, 200);
+        assert.equal(read.json.data.marked, 1);
+        assert.equal((await summary()).read_count, 1);
+        assert.equal((await api('POST', `/api/messages/conversations/${conv}/read`, { token: tokens.teacherA })).json.data.marked, 1);
+        assert.equal((await summary()).read_count, 2);
+        assert.equal((await api('POST', `/api/messages/conversations/${conv}/read`, { token: tokens.adminA })).json.data.marked, 0);
+      });
+
+      it('un non-participant ne peut ni accuser réception ni lire ; aucun accusé hors de la conversation', async () => {
+        assert.equal((await api('POST', `/api/messages/conversations/${conv}/receive`, { token: tokens.accountantA })).status, 404);
+        assert.equal((await api('POST', `/api/messages/conversations/${conv}/read`, { token: tokens.accountantA })).status, 404);
+        assert.equal((await api('POST', `/api/messages/conversations/${conv}/receive`, { token: tokens.adminB })).status, 404);
+        assert.equal((await summary()).recipients_count, 2);
+      });
+
+      it('les accusés restent liés aux destinataires d’origine après retrait d’un participant (historique conservé)', async () => {
+        assert.equal((await api('DELETE', `/api/messages/conversations/${conv}/participants/${userId}`, { token: tokens.adminA })).status, 200);
+        assert.equal((await summary()).recipients_count, 2);
+        assert.equal((await summary()).read_count, 2);
+      });
+    });
+
     describe('Documents : téléversement contrôlé, stockage privé, téléchargement authentifié (§4.4)', () => {
       const PDF = Buffer.from('%PDF-1.4\n1 0 obj << >> endobj\n%%EOF\n');
       const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('donnees')]);

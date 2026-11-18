@@ -60,7 +60,7 @@ Résolues dans cette livraison :
 
 Restent ouvertes :
 - **Documents** : pas d'analyse antivirus (service indisponible ici), pas de versions (un document ne reçoit qu'un fichier), pas de rattachement par classe pour la lecture, la liste reste visible à tous les lecteurs du module.
-- **Accusés de réception et de lecture** (§4.1 point 6) : non implémentés.
+- **Accusés de réception et de lecture** (§4.1 point 6) : implémentés (migration 031). Un accusé par destinataire, créé à l'envoi ; réception et lecture marquées par l'interface. L'expéditeur ne voit que des compteurs. Intégration : 99/99 ; affichage vérifié dans le navigateur.
 - **Statuts des notes** : conservés tels quels (D5).
 - **Barèmes configurables par établissement** (§5.1) : non implémentés.
 - **Environnement** : le proxy exclut `registry.npmjs.org` du relais. Les commandes npm ont été lancées avec la liste `noProxy` vidée, uniquement pour ces commandes. `HTTPS_PROXY` et la vérification TLS n'ont pas été modifiés.
