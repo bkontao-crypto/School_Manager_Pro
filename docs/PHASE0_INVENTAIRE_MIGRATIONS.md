@@ -53,3 +53,7 @@ Totaux fichiers : 43 CREATE TABLE, 36 ADD COLUMN, 47 CREATE INDEX.
 ## 028_grade_corrections_reopen.sql (ajoutée en Phase 1)
 - Additive : index unique `grades_id_tenant_uniq`, table `grade_corrections` (une demande en attente par note), colonnes `reopened_at`, `reopened_by`, `reopen_reason` sur `academic_periods`.
 - Appliquée deux fois sur `smp_fresh` sans erreur (idempotente). Retour arrière : voir l'en-tête du fichier.
+
+## 029_role_gerant.sql (ajoutée en Phase 1)
+- Additive : élargit `users_role_check` et `role_permissions_role_check` avec le rôle « gerant ».
+- Appliquée deux fois sur `smp_fresh` sans erreur. Retour arrière : reclasser les comptes « gerant », puis remettre les listes d'origine.

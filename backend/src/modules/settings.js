@@ -159,7 +159,7 @@ settings.post('/subscription/invoices/:id/pay-online', requireRole('admin'), wra
 
 const users = express.Router();
 users.use(requireRole('admin'));
-const ROLES = ['admin', 'teacher', 'accountant', 'user'];
+const ROLES = ['admin', 'gerant', 'teacher', 'accountant', 'user'];
 
 users.get('/', wrap(async (req, res) => {
   const { limit, offset } = pageParams(req.query);

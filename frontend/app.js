@@ -19,7 +19,7 @@ const store = {
 };
 const session = { token: store.get('smp.token'), tenantId: store.get('smp.tenantId'), user: null };
 
-const ROLE_LABELS = { superadmin: 'Super administrateur', admin: 'Administrateur', teacher: 'Enseignant', accountant: 'Comptable', staff: 'Personnel', parent: 'Parent', user: 'Utilisateur' };
+const ROLE_LABELS = { superadmin: 'Super administrateur', admin: 'Administrateur', gerant: 'Gérant', teacher: 'Enseignant', accountant: 'Comptable', staff: 'Personnel', parent: 'Parent', user: 'Utilisateur' };
 // Niveau d'accès au module (none / read / write) pour l'utilisateur connecté ; l'administrateur a tout.
 const permOf = (key) => (session.user && ['admin', 'superadmin'].includes(session.user.role) ? 'write' : ((session.user && session.user.permissions) || {})[key] || 'none');
 const STATUS_LABELS = {
@@ -816,6 +816,7 @@ async function setupPermissions() {
 // ---------------------------------------------------------------- Paramètres
 async function openSettings() {
   const isAdmin = session.user && ['admin', 'superadmin'].includes(session.user.role);
+  const canReopen = isAdmin || session.user.role === 'gerant';
   moduleView.innerHTML = '<p class="p-6 text-slate-500">Chargement…</p>';
   let tenant = null;
   try { tenant = (await get('/api/settings')).data; } catch (e) { moduleView.innerHTML = `<p class="p-6 text-red-600">${escapeHtml(e.message)}</p>`; return; }
@@ -824,7 +825,7 @@ async function openSettings() {
       <p class="mt-2 text-sm">Nom : <strong id="tenant-name">${escapeHtml(tenant.name)}</strong> ${isAdmin ? '<button id="tenant-edit" class="ml-2 text-blue-600 hover:underline text-sm">Modifier</button>' : ''}</p></section>
     <section class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-3">Mon compte</h3><p class="text-sm text-slate-500">${escapeHtml(session.user.email)} · ${escapeHtml(ROLE_LABELS[session.user.role] || session.user.role)}</p><button id="pwd-btn" class="mt-3 px-4 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700">Changer mon mot de passe</button></section>
     ${isAdmin ? bannerSectionHtml() + identitySectionHtml(false) + subscriptionSectionHtml() + permissionsSectionHtml() : ''}
-    ${isAdmin ? `<section class="bg-white rounded-2xl border border-slate-200 p-5"><div class="flex items-center justify-between mb-3"><h3 class="font-bold">Périodes scolaires (trimestres)</h3><button id="period-add" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-2"></i>Ajouter</button></div><div id="periods-list" class="text-sm space-y-2"></div><p class="mt-3 text-xs text-slate-400">Les périodes servent à filtrer les bulletins.</p></section>
+    ${canReopen ? `<section class="bg-white rounded-2xl border border-slate-200 p-5"><div class="flex items-center justify-between mb-3"><h3 class="font-bold">Périodes scolaires (trimestres)</h3>${isAdmin ? `<button id="period-add" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-2"></i>Ajouter</button>` : ''}</div><div id="periods-list" class="text-sm space-y-2"></div><p class="mt-3 text-xs text-slate-400">Les périodes servent à filtrer les bulletins.</p></section>
     ${isAdmin ? `<section id="corrections-card" class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-3">Corrections de notes en attente</h3><div id="corrections-list" class="text-sm"></div></section>` : ''}
     <section class="bg-white rounded-2xl border border-slate-200 p-5"><div class="flex items-center justify-between mb-3"><h3 class="font-bold">Utilisateurs</h3><button id="user-add" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-2"></i>Ajouter</button></div>
       <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-xs text-slate-500 border-b"><th class="py-2 pr-3">Nom</th><th class="py-2 pr-3">E-mail</th><th class="py-2 pr-3">Rôle</th><th class="py-2 pr-3">Dernière connexion</th><th class="py-2 pr-3">Statut</th><th class="py-2"></th></tr></thead><tbody id="users-rows"></tbody></table></div>
@@ -833,7 +834,8 @@ async function openSettings() {
     const ok = await formModal({ title: 'Changer mon mot de passe', fields: [{ name: 'current_password', label: 'Mot de passe actuel', type: 'password', required: true }, { name: 'new_password', label: 'Nouveau mot de passe (8 caractères minimum)', type: 'password', required: true }], onSubmit: (v) => api('POST', '/api/auth/password', v) });
     if (ok) toast('Mot de passe modifié.');
   });
-  if (!isAdmin) return;
+  if (!canReopen) return;
+  if (isAdmin) {
   setupBannerSection().catch((e) => toast(e.message, 'err'));
   setupIdentitySection('/api/settings/identity').catch((e) => toast(e.message, 'err'));
   setupSubscription().catch((e) => toast(e.message, 'err'));
@@ -842,6 +844,7 @@ async function openSettings() {
     const ok = await formModal({ title: 'Nom de l’établissement', values: { name: tenant.name }, fields: [{ name: 'name', label: 'Nom', required: true }], onSubmit: async (v) => { tenant = (await api('PUT', '/api/settings', v)).data; } });
     if (ok) { $('tenant-name').textContent = tenant.name; toast('Établissement mis à jour.'); }
   });
+  }
   async function loadCorrections() {
     const box = $('corrections-list');
     if (!box) return;
@@ -850,7 +853,7 @@ async function openSettings() {
       box.innerHTML = list.length ? list.map((c) => `<div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2"><span><strong>${escapeHtml(c.student_name)}</strong> · ${escapeHtml(c.subject)} : ${escapeHtml(String(c.old_score))} → <strong>${escapeHtml(String(c.new_score))}</strong> <span class="text-slate-500">par ${escapeHtml(c.requested_by_name)} — « ${escapeHtml(c.reason)} »</span></span><span class="flex gap-3"><button type="button" data-correction-approve="${escapeHtml(c.id)}" class="text-emerald-700 hover:underline">Approuver</button><button type="button" data-correction-reject="${escapeHtml(c.id)}" class="text-red-600 hover:underline">Refuser</button></span></div>`).join('') : '<p class="text-slate-400">Aucune demande en attente.</p>';
     } catch (e) { box.innerHTML = `<p class="text-red-500">${escapeHtml(e.message)}</p>`; }
   }
-  $('corrections-list').addEventListener('click', async (ev) => {
+  if ($('corrections-list')) $('corrections-list').addEventListener('click', async (ev) => {
     const ap = ev.target.closest('[data-correction-approve]');
     const rj = ev.target.closest('[data-correction-reject]');
     const b = ap || rj; if (!b) return;
@@ -864,10 +867,10 @@ async function openSettings() {
     const box = $('periods-list');
     try {
       const list = rows(await get('/api/periods?limit=50'));
-      box.innerHTML = list.length ? list.map((p) => `<div class="flex items-center justify-between border-b border-slate-100 pb-2"><span><strong>${escapeHtml(p.name)}</strong> <span class="text-slate-500">du ${displayDate(p.start_date)} au ${displayDate(p.end_date)}</span></span><span class="flex items-center gap-3">${p.closed_at ? `<span class="text-xs font-semibold text-amber-700">Clôturée</span><button type="button" data-period-reopen="${escapeHtml(p.id)}" class="text-blue-600 hover:underline">Rouvrir</button>` : `<button type="button" data-period-close="${escapeHtml(p.id)}" class="text-blue-600 hover:underline">Clôturer</button><button type="button" data-period-del="${escapeHtml(p.id)}" class="text-red-600 hover:underline">Supprimer</button>`}</span></div>`).join('') : '<p class="text-slate-400">Aucune période définie.</p>';
+      box.innerHTML = list.length ? list.map((p) => `<div class="flex items-center justify-between border-b border-slate-100 pb-2"><span><strong>${escapeHtml(p.name)}</strong> <span class="text-slate-500">du ${displayDate(p.start_date)} au ${displayDate(p.end_date)}</span></span><span class="flex items-center gap-3">${p.closed_at ? `<span class="text-xs font-semibold text-amber-700">Clôturée</span>${canReopen ? `<button type="button" data-period-reopen="${escapeHtml(p.id)}" class="text-blue-600 hover:underline">Rouvrir</button>` : ''}` : `${isAdmin ? `<button type="button" data-period-close="${escapeHtml(p.id)}" class="text-blue-600 hover:underline">Clôturer</button><button type="button" data-period-del="${escapeHtml(p.id)}" class="text-red-600 hover:underline">Supprimer</button>` : ''}`}</span></div>`).join('') : '<p class="text-slate-400">Aucune période définie.</p>';
     } catch (e) { box.innerHTML = `<p class="text-red-500">${escapeHtml(e.message)}</p>`; }
   }
-  $('period-add').addEventListener('click', async () => {
+  if ($('period-add')) $('period-add').addEventListener('click', async () => {
     if (await formModal({ title: 'Ajouter une période', fields: [{ name: 'name', label: 'Nom (ex. Trimestre 1)', required: true }, { name: 'start_date', label: 'Début', type: 'date', required: true }, { name: 'end_date', label: 'Fin', type: 'date', required: true }], onSubmit: (v) => api('POST', '/api/periods', v) })) { toast('Période ajoutée.'); loadPeriods(); }
   });
   $('periods-list').addEventListener('click', async (ev) => {
@@ -891,7 +894,7 @@ async function openSettings() {
   });
   loadPeriods();
   const USER_FIELDS = [{ name: 'email', label: 'Adresse e-mail', type: 'email', required: true }, { name: 'full_name', label: 'Nom complet', required: true },
-    { name: 'role', label: 'Rôle', type: 'select', required: true, options: [['admin', 'Administrateur'], ['teacher', 'Enseignant'], ['accountant', 'Comptable'], ['user', 'Utilisateur']] },
+    { name: 'role', label: 'Rôle', type: 'select', required: true, options: [['admin', 'Administrateur'], ['gerant', 'Gérant'], ['teacher', 'Enseignant'], ['accountant', 'Comptable'], ['user', 'Utilisateur']] },
     { name: 'password', label: 'Mot de passe initial (8 caractères minimum)', type: 'password', required: true }];
   let users = [];
   async function loadUsers() {

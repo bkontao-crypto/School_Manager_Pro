@@ -56,7 +56,7 @@ router.post('/:id/close', requireRole('admin'), wrap(async (req, res) => {
 }));
 
 // Réouverture : administrateur, motif obligatoire, journalisée. Le motif et l'auteur restent enregistrés sur la période.
-router.post('/:id/reopen', requireRole('admin'), wrap(async (req, res) => {
+router.post('/:id/reopen', requireRole('admin', 'gerant'), wrap(async (req, res) => {
   if (!isUuid(req.params.id)) throw new HttpError(400, 'Identifiant invalide.');
   const reason = req.body && req.body.reason;
   if (typeof reason !== 'string' || reason.trim().length < 5) throw new HttpError(400, 'Motif obligatoire (5 caractères minimum).');

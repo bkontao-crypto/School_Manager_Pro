@@ -10,7 +10,7 @@ const db = require('./db');
 
 const LEVELS = ['none', 'read', 'write'];
 const RANK = { none: 0, read: 1, write: 2 };
-const ROLES = ['teacher', 'accountant', 'staff', 'user']; // « parent » : accès fixe au portail, hors matrice
+const ROLES = ['gerant', 'teacher', 'accountant', 'staff', 'user']; // « gerant » : peut rouvrir une période ; « parent » : accès fixe au portail, hors matrice
 const MESSAGE_ROLES = ROLES;
 
 const MODULES = {
@@ -28,8 +28,8 @@ const DEFAULT_WRITE = {
 const DEFAULT_READ_ONLY_ROLES = { reports: ['accountant'] }; // rapports : comptable seulement (en plus de l'administrateur)
 // Aucun accès par défaut hors administrateur (D1 : paiements sauf comptable ; D2 : RH réservées à l'administrateur).
 const DEFAULT_HIDDEN = {
-  payments: ['teacher', 'staff', 'user'],
-  hr: ['teacher', 'accountant', 'staff', 'user']
+  payments: ['gerant', 'teacher', 'staff', 'user'],
+  hr: ['gerant', 'teacher', 'accountant', 'staff', 'user']
 };
 
 function defaultLevel(role, module) {
