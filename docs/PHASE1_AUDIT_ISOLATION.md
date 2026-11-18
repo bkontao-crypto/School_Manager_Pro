@@ -28,5 +28,5 @@ Limite : le script vérifie seulement la présence du mot « tenant » dans la r
 - `utils/mailer.js` : mises à jour d'état après envoi (`sent`, `failed`, `skipped`) bornées par `tenantId`.
 
 ## Reste à traiter
-- `utils/mailer.js` `retry(id)` : relance d'un envoi par identifiant seul (`WHERE id = $1 AND status IN ('failed','skipped')`). Appelée depuis la plateforme ; à borner par établissement lorsque le point d'appel aura été vérifié.
+- `utils/mailer.js` `retry(id)` : **accepté, pas de correction**. Son unique appelant est `POST /platform/mail/outbox/:id/retry`, monté après `requireSuperAdmin` (index.js). Le superadministrateur gère la file de toute la plateforme par conception ; le périmètre inter-établissements est donc voulu.
 - Vérification : `node --check` uniquement. Tests multi-établissements non exécutés (npm bloqué).
