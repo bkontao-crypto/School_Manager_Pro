@@ -110,7 +110,7 @@ const notManager = () => new HttpError(403, 'Seul un gestionnaire de la conversa
 router.get('/conversations/:id/participants', checkUuid('id'), wrap(async (req, res) => {
   await requireVisible(req, req.params.id);
   const rows = await db.query(
-    `SELECT cp.user_id, u.full_name, cp.is_manager, cp.added_at
+    `SELECT cp.user_id, u.full_name, cp.is_manager, cp.added_at, cp.last_read_at
        FROM conversation_participants cp
        JOIN users u ON u.id = cp.user_id AND u.tenant_id = cp.tenant_id
       WHERE cp.conversation_id = $1 AND cp.tenant_id = $2
@@ -146,6 +146,18 @@ router.delete('/conversations/:id/participants/:userId', requireWrite('messages'
   if (!del.rows.length) throw new HttpError(404, 'Participant introuvable.');
   await audit(req, { action: 'conversation.participant_remove', entity: 'conversation', entityId: req.params.id, details: { user_id: req.params.userId } });
   res.json({ data: { conversation_id: req.params.id, user_id: req.params.userId } });
+}));
+
+// Date de dernière lecture : seul le participant lui-même peut la mettre à jour (l'administrateur, non inscrit, ne lit pas).
+router.post('/conversations/:id/read', checkUuid('id'), wrap(async (req, res) => {
+  const r = await db.query(
+    `UPDATE conversation_participants SET last_read_at = NOW()
+      WHERE conversation_id = $1 AND tenant_id = $2 AND user_id = $3
+      RETURNING last_read_at`,
+    [req.params.id, req.tenantId, req.user.id]
+  );
+  if (!r.rows.length) throw new HttpError(404, 'Conversation introuvable.');
+  res.json({ data: { conversation_id: req.params.id, last_read_at: r.rows[0].last_read_at } });
 }));
 
 module.exports = router;
