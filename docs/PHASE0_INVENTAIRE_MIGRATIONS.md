@@ -45,3 +45,7 @@ Totaux fichiers : 43 CREATE TABLE, 36 ADD COLUMN, 47 CREATE INDEX.
 - Les migrations appliquées ne doivent pas être modifiées (règle §3.4) ; toute correction passe par une nouvelle migration.
 - Test de retour arrière : non établi (pas de scripts `down`). Pour la migration 026, le retour arrière est documenté en tête de fichier.
 - Mise à niveau depuis une base existante : non testée (pas de base représentative disponible).
+
+## 027_period_closure.sql (ajoutée en Phase 1)
+- Additive : `academic_periods.closed_at`, `closed_by` (nullables), clé composite `academic_periods_closed_by_fk` vers `users (id, tenant_id)`.
+- Appliquée deux fois sur `smp_test` sans erreur (idempotente). Retour arrière : voir l'en-tête du fichier.

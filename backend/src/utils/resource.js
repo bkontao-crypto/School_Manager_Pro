@@ -28,6 +28,7 @@ function makeResource({
   module, // clé de permission du module : si fournie, remplace writeRoles (droits configurables par établissement)
   defaults,
   create, // (req, values) : remplace l'INSERT générique (transactions, participants, etc.) ; doit renvoyer la ligne créée
+  guard, // (req, values) : contrôle métier appelé avant création ; lève une HttpError pour refuser
   scope, // (req, ph) => clause SQL | null : périmètre de lecture (liste, décompte, export) ; ph(valeur) renvoie un paramètre $n
   afterCreate, // (req, row) : effet de bord non bloquant après création
   exportCsv // { filename, columns: [[clé, en-tête, format?]] } : GET /export.csv (mêmes filtres que la liste), tracé dans le journal d'audit
@@ -83,6 +84,7 @@ function makeResource({
     const { values, errors } = validate(req.body, fields);
     if (errors.length) return invalid(res, errors);
     const all = { ...values, ...(defaults ? defaults(req) : {}) };
+    if (guard) await guard(req, all); // contrôle métier avant écriture (ex. période clôturée)
 
     let row;
     if (create) {

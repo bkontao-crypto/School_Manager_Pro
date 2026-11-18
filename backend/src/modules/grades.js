@@ -30,23 +30,40 @@ const router = makeResource({
     evaluation_type: { type: 'string', max: 50 },
     score: { type: 'number', required: true, min: 0, max: 20 },
     // La colonne est DECIMAL(3,2) : le coefficient ne peut pas dépasser 9,99.
-    coefficient: { type: 'number', exclusiveMin: 0, max: 9.99, default: 1 }
+    coefficient: { type: 'number', exclusiveMin: 0, max: 9.99, default: 1 },
+    date: { type: 'date' }
   },
   // Statut imposé côté serveur : le client ne peut pas créer une note déjà validée.
   defaults: () => ({ status: 'saisie' }),
+  // Une période clôturée ne reçoit plus de notes (ordonnance §5.2).
+  guard: async (req, values) => {
+    if (!values.date) return;
+    const r = await db.query(
+      'SELECT name FROM academic_periods WHERE tenant_id = $1 AND closed_at IS NOT NULL AND $2::date BETWEEN start_date AND end_date LIMIT 1',
+      [req.tenantId, values.date]
+    );
+    if (r.rows.length) throw new HttpError(409, `La période « ${r.rows[0].name} » est clôturée : aucune note ne peut y être ajoutée.`);
+  },
   module: 'grades',
   exportCsv: { filename: 'notes.csv', columns: [['student_name', 'Élève'], ['subject', 'Matière'], ['evaluation_type', 'Évaluation'], ['score', 'Note /20'], ['coefficient', 'Coefficient'], ['date', 'Date'], ['status', 'Statut']] }
 });
 
-// Transition gardée : la mise à jour ne réussit que si la note est dans l'état attendu, dans l'établissement de l'utilisateur.
+// La date de la note tombe dans une période clôturée de son établissement (expression SQL réutilisable).
+const inClosedPeriod = (a) => `EXISTS (SELECT 1 FROM academic_periods p WHERE p.tenant_id = ${a}.tenant_id AND p.closed_at IS NOT NULL AND ${a}.date BETWEEN p.start_date AND p.end_date)`;
+
+// Transition gardée : la mise à jour ne réussit que si la note est dans l'état attendu, hors période clôturée, dans l'établissement de l'utilisateur.
 const transition = (from, to, action) => wrap(async (req, res) => {
   const r = await db.query(
-    'UPDATE grades SET status = $3 WHERE id = $1 AND tenant_id = $2 AND status = $4 RETURNING id, status',
+    `UPDATE grades SET status = $3 WHERE id = $1 AND tenant_id = $2 AND status = $4 AND NOT ${inClosedPeriod('grades')} RETURNING id, status`,
     [req.params.id, req.tenantId, to, from]
   );
   if (!r.rows.length) {
-    const current = await db.query('SELECT status FROM grades WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenantId]);
+    const current = await db.query(
+      `SELECT g.status, ${inClosedPeriod('g')} AS locked FROM grades g WHERE g.id = $1 AND g.tenant_id = $2`,
+      [req.params.id, req.tenantId]
+    );
     if (!current.rows.length) throw new HttpError(404, 'Note introuvable.');
+    if (current.rows[0].locked) throw new HttpError(409, 'Action impossible : la période de cette note est clôturée.');
     throw new HttpError(409, `Action impossible : la note est « ${current.rows[0].status} ».`);
   }
   await audit(req, { action: `grade.${action}`, entity: 'grade', entityId: req.params.id, details: { from, to } });
