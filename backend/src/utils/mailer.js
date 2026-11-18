@@ -39,15 +39,15 @@ async function deliver({ tenantId = null, to, subject, text, html, kind = 'other
     [tenantId, String(to).slice(0, 255), String(subject).slice(0, 300), text || '', html || null, kind, ref, cfg.configured ? 'queued' : 'skipped', attachments[0] ? String(attachments[0].filename).slice(0, 150) : null, invoiceId]);
   const id = ins.rows[0].id;
   if (!cfg.configured) {
-    await db.query(`UPDATE mail_outbox SET error = 'Envoi d’e-mails non configuré (SMTP_HOST / MAIL_FROM).' WHERE id = $1`, [id]);
+    await db.query(`UPDATE mail_outbox SET error = 'Envoi d’e-mails non configuré (SMTP_HOST / MAIL_FROM).' WHERE id = $1 AND tenant_id IS NOT DISTINCT FROM $2`, [id, tenantId]);
     return { status: 'skipped', id, error: 'Envoi d’e-mails non configuré.' };
   }
   try {
     await sendSmtp({ ...cfg, to, subject, text, html, attachments });
-    await db.query(`UPDATE mail_outbox SET status = 'sent', attempts = attempts + 1, sent_at = now(), error = NULL WHERE id = $1`, [id]);
+    await db.query(`UPDATE mail_outbox SET status = 'sent', attempts = attempts + 1, sent_at = now(), error = NULL WHERE id = $1 AND tenant_id IS NOT DISTINCT FROM $2`, [id, tenantId]);
     return { status: 'sent', id };
   } catch (e) {
-    await db.query(`UPDATE mail_outbox SET status = 'failed', attempts = attempts + 1, error = $2 WHERE id = $1`, [id, String(e.message).slice(0, 300)]);
+    await db.query(`UPDATE mail_outbox SET status = 'failed', attempts = attempts + 1, error = $2 WHERE id = $1 AND tenant_id IS NOT DISTINCT FROM $3`, [id, String(e.message).slice(0, 300), tenantId]);
     return { status: 'failed', id, error: e.message };
   }
 }

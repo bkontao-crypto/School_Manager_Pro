@@ -21,3 +21,12 @@ Limite : le script vérifie seulement la présence du mot « tenant » dans la r
 - Ajouter `tenant_id` dans les clauses des traitements système (point 5).
 - `mail_outbox.tenant_id` est en `ON DELETE SET NULL` : une suppression d'établissement détache les envois au lieu de les supprimer. Ce comportement doit être confirmé avant la phase de suppression (Phase 9).
 - Aucun test multi-établissements n'a encore été exécuté : à faire dès que npm est accessible (§16.2, point 29).
+
+## Corrections appliquées (même branche)
+- `utils/notify.js` : mises à jour d'état des SMS/WhatsApp (`sent`, `failed`) bornées par `tenant_id` ; déduplication des relances d'impayés bornée par `c.tenant_id`.
+- `utils/reminders.js` : déduplication (`notification_log`) et décompte des échecs (`mail_outbox`) bornés par `it.tenantId` (`IS NOT DISTINCT FROM`, pour les envois sans établissement).
+- `utils/mailer.js` : mises à jour d'état après envoi (`sent`, `failed`, `skipped`) bornées par `tenantId`.
+
+## Reste à traiter
+- `utils/mailer.js` `retry(id)` : relance d'un envoi par identifiant seul (`WHERE id = $1 AND status IN ('failed','skipped')`). Appelée depuis la plateforme ; à borner par établissement lorsque le point d'appel aura été vérifié.
+- Vérification : `node --check` uniquement. Tests multi-établissements non exécutés (npm bloqué).

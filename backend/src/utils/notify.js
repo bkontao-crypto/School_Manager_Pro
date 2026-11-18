@@ -70,10 +70,10 @@ async function deliverPhone({ tenantId, channel, to, body, kind = 'other', ref =
   if (status0 === 'skipped') return { status: 'skipped', id, error: !phone ? 'Numéro invalide.' : capped ? 'Plafond journalier de messages atteint.' : st.reason };
   try {
     const sid = await twilioSend(channel, phone, text);
-    await db.query(`UPDATE notify_outbox SET status = 'sent', attempts = 1, sent_at = now(), provider_id = $2 WHERE id = $1`, [id, sid]);
+    await db.query(`UPDATE notify_outbox SET status = 'sent', attempts = 1, sent_at = now(), provider_id = $2 WHERE id = $1 AND tenant_id = $3`, [id, sid, tenantId]);
     return { status: 'sent', id };
   } catch (e) {
-    await db.query(`UPDATE notify_outbox SET status = 'failed', attempts = 1, error = $2 WHERE id = $1`, [id, String(e.message).slice(0, 300)]);
+    await db.query(`UPDATE notify_outbox SET status = 'failed', attempts = 1, error = $2 WHERE id = $1 AND tenant_id = $3`, [id, String(e.message).slice(0, 300), tenantId]);
     return { status: 'failed', id, error: e.message };
   }
 }
@@ -225,7 +225,7 @@ async function runUnpaidReminders() {
       if (r.age < c.unpaid_after_days) continue;
       const step = Math.min(2, Math.floor((r.age - c.unpaid_after_days) / UNPAID_STEP_DAYS));
       const ref = `${r.payment_id}:${step}`;
-      const logged = await db.query(`SELECT 1 FROM notification_log WHERE kind = 'unpaid' AND ref = $1`, [`${ref}:${r.parent_id}`]);
+      const logged = await db.query(`SELECT 1 FROM notification_log WHERE kind = 'unpaid' AND ref = $1 AND tenant_id = $2`, [`${ref}:${r.parent_id}`, c.tenant_id]);
       if (!logged.rows.length) due.push({ ...r, ref: `${ref}:${r.parent_id}` });
     }
     const name = await schoolName(c.tenant_id);
