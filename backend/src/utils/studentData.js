@@ -7,7 +7,8 @@ const mention = (avg) => (avg >= 16 ? 'Très bien' : avg >= 14 ? 'Bien' : avg >=
 const periodKey = (f) => (f.from || f.to ? `${f.from || ''}_${f.to || ''}` : 'all');
 
 // Dossier : identité, classe, notes, présences, paiements (et responsables si demandé). null si l'élève n'existe pas.
-async function loadProfile(tenantId, id, { withParents = true } = {}) {
+// validatedGradesOnly : portail parent — seules les notes validées (publiables) sont listées (ordonnance §6.4 et §8.1).
+async function loadProfile(tenantId, id, { withParents = true, validatedGradesOnly = false } = {}) {
   const student = await db.query(
     `SELECT s.id, s.matricule, s.first_name, s.last_name, s.date_of_birth, s.gender, s.status, s.class_id,
             s.photo_url, s.address, s.emergency_phone, s.created_at,
@@ -26,7 +27,7 @@ async function loadProfile(tenantId, id, { withParents = true } = {}) {
         WHERE sp.student_id = $1 AND sp.tenant_id = $2
         ORDER BY sp.is_primary DESC, p.last_name`, [id, tenantId]) : Promise.resolve({ rows: [] }),
     db.query(`SELECT id, subject, evaluation_type, score, coefficient, date, status FROM grades
-               WHERE student_id = $1 AND tenant_id = $2 AND status <> 'annulee' ORDER BY date DESC NULLS LAST, created_at DESC LIMIT 500`, [id, tenantId]),
+               WHERE student_id = $1 AND tenant_id = $2 AND status ${validatedGradesOnly ? "= 'validee'" : "<> 'annulee'"} ORDER BY date DESC NULLS LAST, created_at DESC LIMIT 500`, [id, tenantId]),
     db.query(`SELECT a.id, a.class_id, c.name AS class_name, a.date, a.status, a.notes FROM attendances a
                 LEFT JOIN classes c ON c.id = a.class_id AND c.tenant_id = a.tenant_id
                WHERE a.student_id = $1 AND a.tenant_id = $2 ORDER BY a.date DESC LIMIT 500`, [id, tenantId]),
