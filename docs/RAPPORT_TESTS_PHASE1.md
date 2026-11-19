@@ -104,3 +104,12 @@ Options à décider par l’établissement (aucune n’a été appliquée) :
 3. Prendre en compte les notes héritées dans les bulletins par un indicateur dédié.
 
 Tant que ce point n’est pas tranché, la branche ne doit pas être fusionnée dans `main`.
+
+### 7.4 Reprise des notes antérieures (migration 033) — Réalisé et vérifié sur copie
+Décision de l’établissement : option 1 (validation automatique des notes existantes, avec trace).
+- Migration `033_backfill_validated_grades.sql` (corrective, nouvelle) : chaque note `saisie` existante passe à `validee` ; son statut d’origine est conservé dans `grades_status_backfill_033` ; une entrée d’audit par établissement (`grade.backfill_validated`, sans utilisateur, avec le nombre de notes).
+- Vérifications sur la copie de base (32 notes) : 32 notes `validee`, 32 lignes de reprise, 1 entrée d’audit (count 32) ; second passage sans effet (0 reprise, 0 audit ajouté) ; bulletin de l’élève test : 4 matières, mêmes moyennes qu’avant la mise à niveau (Français 11, Histoire 6, Mathématiques 6, Physique 16).
+- Retour arrière vérifié en transaction annulée : le statut d’origine `saisie` est restauré pour les 32 notes.
+- Intégration sur base vide (001→033) : 104/104.
+- Note : une première rédaction de la migration n’avait rien mis à jour (lecture et écriture dans la même instruction). Elle n’était ni commitée ni déployée ; elle a été corrigée et rejouée sur la copie de test, dont l’état a été remis à l’avant-033.
+- Reste à faire : refaire cette mise à niveau sur une base réelle sauvegardée avant la fusion ; vérifier que l’établissement accepte que ces notes deviennent validées.

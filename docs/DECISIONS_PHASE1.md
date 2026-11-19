@@ -41,3 +41,6 @@ Une réponse sur ces trois points suffit pour que je poursuive la Phase 1 avec l
 - **D9 — Libellé du bulletin** : « Nb notes » au lieu de « Notes ».
 - **D10 — Fusion dans `main`** : non effectuée. Elle sera proposée après la recette navigateur complète.
 - **D11 — Anciennes branches distantes** : suppression manuelle par le propriétaire du dépôt.
+
+## D12 — Notes antérieures à la Phase 1 (19/11/2026)
+Décision de l’établissement : les notes existantes en `saisie` sont validées automatiquement par la migration 033, avec conservation du statut d’origine et trace d’audit. Retour arrière documenté dans la migration.
