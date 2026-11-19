@@ -2,7 +2,8 @@
 // le téléchargement et l'envoi par e-mail.
 
 const db = require('./db');
-const { Pdf, wrap } = require('./pdf');
+const { Pdf, wrap, textWidth } = require('./pdf');
+const { C, MARGIN, band, pill, footer } = require('./pdfTheme');
 
 const INVOICE_SQL = `
   SELECT i.id, i.number, i.tenant_id, t.name AS tenant_name, t.code AS tenant_code, i.plan_id, p.name AS plan_name, i.description,
@@ -30,48 +31,84 @@ const dateFr = (d) => (d ? String(d).slice(0, 10).split('-').reverse().join('/')
 const METHODS = { cash: 'Espèces', transfer: 'Virement', mobile_money: 'Mobile money', cheque: 'Chèque', card: 'Carte' };
 
 function renderInvoicePdf(inv) {
-  const pdf = new Pdf(); const L = 50; const R = pdf.width - 50; const credit = inv.document_type === 'credit_note'; const iss = inv.issuer; const t = inv.tenant || {};
-  pdf.rect(0, pdf.height - 70, pdf.width, 70, { fill: 0.12 });
-  pdf.text(L, pdf.height - 38, iss.app_name, { size: 16, bold: true, gray: 1 });
-  if (iss.slogan) pdf.text(L, pdf.height - 55, iss.slogan, { size: 9, gray: 0.85 });
-  pdf.text(R, pdf.height - 38, credit ? 'AVOIR' : 'FACTURE', { size: 16, bold: true, align: 'right', gray: 1 });
-  pdf.text(R, pdf.height - 55, inv.number, { size: 10, align: 'right', gray: 0.85 });
-  let y = pdf.height - 110;
-  pdf.text(L, y, 'Facturé à', { size: 8, gray: 0.5 }); pdf.text(R - 190, y, 'Dates', { size: 8, gray: 0.5 }); y -= 16;
-  pdf.text(L, y, inv.tenant_name, { size: 12, bold: true });
-  pdf.text(R - 190, y, `Émission : ${dateFr(inv.created_at)}`, { size: 10 }); y -= 14;
-  const lines = [t.city, t.contact_name, t.contact_email, t.contact_phone].filter(Boolean);
-  const dueLine = credit ? (inv.credit_for_number ? `Sur la facture ${inv.credit_for_number}` : '') : `Échéance : ${dateFr(inv.due_date)}`;
-  pdf.text(R - 190, y, dueLine, { size: 10 });
-  lines.forEach((l, k) => { pdf.text(L, y - k * 13, l, { size: 10, gray: 0.3 }); });
-  y -= Math.max(lines.length * 13, 28) + 20;
-  pdf.rect(L, y - 6, R - L, 22, { fill: 0.9 });
-  pdf.text(L + 4, y, 'Description', { size: 10, bold: true }); pdf.text(L + 300, y, 'Période', { size: 10, bold: true }); pdf.text(R - 4, y, 'Montant', { size: 10, bold: true, align: 'right' });
-  y -= 26;
-  const desc = wrap(inv.description, 280, 10, false);
-  desc.forEach((l, k) => pdf.text(L + 4, y - k * 13, l, { size: 10 }));
-  pdf.text(L + 300, y, `${dateFr(inv.period_start)} - ${dateFr(inv.period_end)}`, { size: 10 });
-  pdf.text(R - 4, y, money(Math.abs(credit ? inv.amount : inv.subtotal)), { size: 10, align: 'right' });
-  y -= desc.length * 13 + 8; pdf.line(L, y, R, y, { gray: 0.85 }); y -= 22;
-  const row = (label, value, bold = false, size = 10) => { pdf.text(R - 150, y, label, { size, bold, align: 'right' }); pdf.text(R - 4, y, value, { size, bold, align: 'right' }); y -= 16; };
-  if (!credit) {
-    if (inv.discount_amount > 0 || inv.tax_amount > 0) row('Sous-total HT', money(inv.subtotal));
-    if (inv.discount_amount > 0) row('Remise', `- ${money(inv.discount_amount)}`);
-    if (inv.tax_amount > 0) row(`TVA ${String(inv.tax_rate).replace('.', ',')} %`, money(inv.tax_amount));
-  }
-  y -= 4; row(credit ? 'Total de l’avoir' : 'Total TTC', money(Math.abs(inv.amount)), true, 12);
-  if (inv.credited > 0) { row('Avoirs émis', `- ${money(Math.abs(inv.credited))}`); row('Net à régler', money(Math.abs(inv.amount) - Math.abs(inv.credited)), true); }
-  y -= 12;
-  if (inv.status === 'paid') pdf.text(L, y, `Payée le ${dateFr(inv.paid_at)} - ${METHODS[inv.payment_method] || inv.payment_method || 'mode non précisé'}${inv.payment_ref ? ` (réf. ${inv.payment_ref})` : ''}`, { size: 10, bold: true });
-  else if (inv.status === 'cancelled') pdf.text(L, y, 'Facture annulée.', { size: 10, bold: true });
-  else if (!credit) pdf.text(L, y, 'En attente de règlement.', { size: 10, bold: true });
+  const pdf = new Pdf(); const L = MARGIN; const R = pdf.width - MARGIN; const CW = R - L;
+  const credit = inv.document_type === 'credit_note'; const iss = inv.issuer; const t = inv.tenant || {};
+  const docTitle = credit ? 'AVOIR' : 'FACTURE';
+  let y = band(pdf, { org: iss.app_name, subtitle: iss.slogan || 'Abonnement plateforme', title: docTitle, titleSub: inv.number }) - 28;
+
+  // Client et dates
+  const half = (CW - 12) / 2; const ch = 104; const x2 = L + half + 12;
+  pdf.rect(L, y - ch, half, ch, { fill: C.panel, stroke: C.border, radius: 8 });
+  pdf.text(L + 14, y - 20, 'FACTURÉ À', { size: 7, bold: true, color: C.muted });
+  pdf.text(L + 14, y - 38, inv.tenant_name || '', { size: 12, bold: true, color: C.brandDark });
+  [t.city, t.contact_name, t.contact_email, t.contact_phone].filter(Boolean).slice(0, 4).forEach((l, k) => pdf.text(L + 14, y - 54 - k * 12, l, { size: 8.5, color: C.muted }));
+  pdf.rect(x2, y - ch, half, ch, { fill: C.panel, stroke: C.border, radius: 8 });
+  pdf.text(x2 + 14, y - 20, 'DATES', { size: 7, bold: true, color: C.muted });
+  pdf.text(x2 + 14, y - 38, `Émission : ${dateFr(inv.created_at)}`, { size: 9.5, color: C.ink });
+  pdf.text(x2 + 14, y - 54, credit ? (inv.credit_for_number ? `Sur la facture ${inv.credit_for_number}` : 'Avoir') : `Échéance : ${dateFr(inv.due_date)}`, { size: 9.5, color: C.ink });
+  if (inv.status === 'paid') pdf.text(x2 + 14, y - 72, `Payée le ${dateFr(inv.paid_at)}`, { size: 9, bold: true, color: C.goodInk });
+  y -= ch + 24;
+
+  // Prestations
+  pdf.rect(L, y - 22, CW, 22, { fill: C.brand });
+  pdf.text(L + 12, y - 14, 'DESCRIPTION', { size: 8, bold: true, color: C.white });
+  pdf.text(L + CW * 0.6, y - 14, 'PÉRIODE', { size: 8, bold: true, color: C.white });
+  pdf.text(R - 12, y - 14, 'MONTANT', { size: 8, bold: true, color: C.white, align: 'right' });
   y -= 22;
-  if (inv.notes) { wrap(inv.notes, R - L, 9, false).forEach((l) => { pdf.text(L, y, l, { size: 9, gray: 0.4 }); y -= 12; }); y -= 6; }
-  if (!credit && iss.payment_instructions) {
-    pdf.text(L, y, 'Modalités de paiement', { size: 9, bold: true, gray: 0.4 }); y -= 14;
-    wrap(iss.payment_instructions, R - L, 10, false).forEach((l) => { pdf.text(L, y, l, { size: 10 }); y -= 13; }); y -= 8;
+  const desc = wrap(inv.description || '', CW * 0.55, 9.5, false);
+  const rowH = Math.max(28, desc.length * 13 + 16);
+  pdf.rect(L, y - rowH, CW, rowH, { fill: C.zebra });
+  desc.forEach((l, k) => pdf.text(L + 12, y - 18 - k * 13, l, { size: 9.5, color: C.ink }));
+  pdf.text(L + CW * 0.6, y - 18, `${dateFr(inv.period_start)} - ${dateFr(inv.period_end)}`, { size: 9, color: C.text });
+  pdf.text(R - 12, y - 18, money(Math.abs(credit ? inv.amount : inv.subtotal)), { size: 9.5, bold: true, color: C.ink, align: 'right' });
+  y -= rowH + 20;
+  const tableEnd = y;
+
+  // Statut (gauche)
+  const status = credit ? { label: 'AVOIR', bg: C.infoLight, ink: C.infoInk }
+    : inv.status === 'paid' ? { label: 'PAYÉE', bg: C.goodLight, ink: C.goodInk }
+      : inv.status === 'cancelled' ? { label: 'ANNULÉE', bg: C.badLight, ink: C.badInk }
+        : { label: 'EN ATTENTE DE RÈGLEMENT', bg: C.warnLight, ink: C.warnInk };
+  pill(pdf, L, y - 4, status.label, { bg: status.bg, ink: status.ink });
+  if (inv.status === 'paid') {
+    const mode = METHODS[inv.payment_method] || inv.payment_method || 'mode non précisé';
+    pdf.text(L, y - 30, `Mode : ${mode}${inv.payment_ref ? ` (réf. ${inv.payment_ref})` : ''}`, { size: 9, color: C.text });
   }
-  if (iss.legal_details) { pdf.line(L, 70, R, 70, { gray: 0.8 }); wrap(iss.legal_details, R - L, 8, false).slice(0, 4).forEach((l, k) => pdf.text(L, 58 - k * 10, l, { size: 8, gray: 0.5 })); }
+
+  // Totaux (droite)
+  const bx = R - 230; let ty = y;
+  const tRow = (label, value) => { pdf.text(bx + 8, ty, label, { size: 9.5, color: C.muted }); pdf.text(R - 8, ty, value, { size: 9.5, color: C.ink, align: 'right' }); ty -= 16; };
+  if (!credit) {
+    if (inv.discount_amount > 0 || inv.tax_amount > 0) tRow('Sous-total HT', money(inv.subtotal));
+    if (inv.discount_amount > 0) tRow('Remise', `- ${money(inv.discount_amount)}`);
+    if (inv.tax_amount > 0) tRow(`TVA ${String(inv.tax_rate).replace('.', ',')} %`, money(inv.tax_amount));
+  }
+  pdf.rect(bx, ty - 30, 230, 30, { fill: C.brand, radius: 6 });
+  pdf.text(bx + 10, ty - 19, credit ? 'Total de l’avoir' : 'Total TTC', { size: 9.5, bold: true, color: C.white });
+  pdf.text(R - 10, ty - 20, money(Math.abs(inv.amount)), { size: 12, bold: true, color: C.white, align: 'right' });
+  ty -= 38;
+  if (inv.credited > 0) {
+    tRow('Avoirs émis', `- ${money(Math.abs(inv.credited))}`);
+    tRow('Net à régler', money(Math.abs(inv.amount) - Math.abs(inv.credited)));
+  }
+  y = Math.min(tableEnd, ty) - 24;
+
+  // Modalités de paiement
+  if (!credit && iss.payment_instructions) {
+    const lines = wrap(iss.payment_instructions, CW - 28, 9, false).slice(0, 6);
+    const bh = 30 + lines.length * 12;
+    pdf.rect(L, y - bh, CW, bh, { fill: C.infoLight, radius: 8 });
+    pdf.text(L + 14, y - 18, 'MODALITÉS DE PAIEMENT', { size: 7.5, bold: true, color: C.infoInk });
+    lines.forEach((l, k) => pdf.text(L + 14, y - 34 - k * 12, l, { size: 9, color: C.text }));
+    y -= bh + 16;
+  }
+  if (inv.notes) {
+    wrap(inv.notes, CW, 9, false).slice(0, 5).forEach((l) => { pdf.text(L, y, l, { size: 9, color: C.muted }); y -= 12; });
+  }
+
+  // Mentions légales (au pied, au-dessus du filet)
+  const legal = iss.legal_details ? wrap(iss.legal_details, CW, 7.5, false) : [];
+  footer(pdf, { text: `${iss.app_name} · ${docTitle.toLowerCase()} ${inv.number} · Généré le ${new Date().toISOString().slice(0, 10).split('-').reverse().join('/')} · School Manager Pro`, legal: legal.slice(0, 3).reverse() });
   return pdf.toBuffer({ title: `${credit ? 'Avoir' : 'Facture'} ${inv.number}` });
 }
 

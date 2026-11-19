@@ -61,3 +61,17 @@ test('Bulletin PDF : bandeau, indicateurs, graphique et pied de page sur chaque 
   assert.ok(c.includes('Page 1 / ') && c.includes('MOYENNE G'));
   assert.ok(/ rg\n| rg /.test(c), 'couleurs de marque présentes');
 });
+
+test('Reçu et facture : charte commune, pied de page numéroté, statut lisible', () => {
+  const { renderReceipt } = require('../../backend/src/utils/receiptPdf');
+  const { renderInvoicePdf } = require('../../backend/src/utils/invoiceData');
+  const rc = contents(renderReceipt({ school_name: 'École', first_name: 'A', last_name: 'B', amount: 85000, status: 'paye', receipt_number: 'R-1', fee_type: 'Scolarité', method: 'Espèces', paid_at: '2026-11-18' }));
+  assert.ok(rc.includes('ENCAISS') && rc.includes('Page 1 / 1') && rc.includes('Cachet et signature'));
+  const rcAnnule = contents(renderReceipt({ school_name: 'École', first_name: 'A', last_name: 'B', amount: 1, status: 'annule', receipt_number: 'R-2' }));
+  assert.ok(rcAnnule.includes('ANNUL'));
+  const inv = { number: 'FAC-1', document_type: 'invoice', created_at: '2026-11-01', due_date: '2026-11-30', period_start: '2026-11-01', period_end: '2026-11-30', description: 'Abonnement', amount: 1000, subtotal: 1000, discount_amount: 0, tax_amount: 0, tax_rate: 0, status: 'issued', credited: 0, tenant_name: 'Lycée', tenant: {}, issuer: { app_name: 'SMP', legal_details: 'Mentions', payment_instructions: 'Virement' } };
+  const fc = contents(renderInvoicePdf(inv));
+  assert.ok(fc.includes('FACTURE') && fc.includes('Total TTC') && fc.includes('Page 1 / 1'));
+  assert.ok(!fc.includes('Thu ') && !/Generé le [A-Z][a-z]{2} /.test(fc), 'date du pied au format jj/mm/aaaa');
+  assert.ok(contents(renderInvoicePdf({ ...inv, document_type: 'credit_note', credit_for_number: 'FAC-0' })).includes('Total de l'));
+});

@@ -130,3 +130,11 @@ Limites : il s’agit d’une copie de test alimentée par l’API de la version
 - Tests : unitaires 28/28 (ajout : couleurs, arrondis, compression, pieds de page, bulletin) ; intégration 104/104 (les assertions sur le texte des PDF lisent désormais le contenu décompressé).
 - Vérification visuelle : rendu contrôlé page par page (bulletin de 8 matières sur 2 pages, bulletin de 30 matières sur 2 pages avec en-tête répété et lignes alternées). Deux défauts trouvés et corrigés pendant la vérification : création de page incorrecte et chevauchement des libellés d’en-tête.
 - Hors périmètre de cette livraison : les reçus et les factures utilisent toujours leur mise en page actuelle (même moteur, nouvelle mise en page à prévoir).
+
+### 7.7 Reçus et factures dans la charte commune — Réalisé et vérifié
+- Nouveau module `backend/src/utils/pdfTheme.js` : palette, bandeau de marque, cartes, pastilles de statut, pied de page numéroté (mentions légales optionnelles), partagés par les documents.
+- Reçu de paiement (`receiptPdf.js`) : bandeau, carte élève, carte « Montant reçu » colorée, pastille ENCAISSÉ ou ANNULÉ, détails, montant en lettres, zone de signature.
+- Facture et avoir (`invoiceData.js`) : bandeau (FACTURE ou AVOIR), cartes « Facturé à » et « Dates », tableau de prestations à ligne alternée, statut coloré, bloc de totaux (total mis en valeur), modalités de paiement, mentions légales au pied.
+- Correction pendant la vérification : date du pied de page de la facture affichée au format brut.
+- Tests : unitaires 29/29 (ajout : reçu, facture, avoir, format de date du pied) ; intégration 104/104.
+- Vérification visuelle : reçu encaissé, reçu annulé, facture en attente, avoir.
