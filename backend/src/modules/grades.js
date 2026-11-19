@@ -1,4 +1,4 @@
-// Module Notes (barème sur 20, cohérent avec la contrainte grades_score_check de la migration 013).
+// Module Notes. Barème de l'établissement : 10 ou 20 (migration 032) ; la contrainte grades_score_check (0..20) reste la borne absolue.
 // Cycle de vie (ordonnance §6.4) : une note est créée en « saisie » quel que soit le statut envoyé par le client.
 // Seule l'administration (responsable pédagogique) valide ou annule, et seulement depuis « saisie » :
 //   saisie → validee   (POST /:id/validate)
@@ -13,6 +13,12 @@ const { requireRole } = require('../middleware/auth');
 const { audit } = require('../utils/audit');
 const { isUuid } = require('../utils/validate');
 const { requireWrite } = require('../utils/permissions');
+
+// Barème de l'établissement (10 ou 20).
+async function scaleMax(tenantId) {
+  const r = await db.query('SELECT grade_scale_max FROM tenants WHERE id = $1', [tenantId]);
+  return Number(r.rows[0] && r.rows[0].grade_scale_max) || 20;
+}
 
 const MIN_MOTIF = 5;
 const checkMotif = (reason) => {
@@ -45,6 +51,8 @@ const router = makeResource({
   defaults: () => ({ status: 'saisie' }),
   // Une période clôturée ne reçoit plus de notes (ordonnance §5.2).
   guard: async (req, values) => {
+    const max = await scaleMax(req.tenantId);
+    if (values.score > max) throw new HttpError(400, `La note ne peut pas dépasser ${max} (barème de l’établissement).`);
     if (!values.date) return;
     const r = await db.query(
       'SELECT name FROM academic_periods WHERE tenant_id = $1 AND closed_at IS NOT NULL AND $2::date BETWEEN start_date AND end_date LIMIT 1',
@@ -53,7 +61,7 @@ const router = makeResource({
     if (r.rows.length) throw new HttpError(409, `La période « ${r.rows[0].name} » est clôturée : aucune note ne peut y être ajoutée.`);
   },
   module: 'grades',
-  exportCsv: { filename: 'notes.csv', columns: [['student_name', 'Élève'], ['subject', 'Matière'], ['evaluation_type', 'Évaluation'], ['score', 'Note /20'], ['coefficient', 'Coefficient'], ['date', 'Date'], ['status', 'Statut']] }
+  exportCsv: { filename: 'notes.csv', columns: [['student_name', 'Élève'], ['subject', 'Matière'], ['evaluation_type', 'Évaluation'], ['score', 'Note'], ['coefficient', 'Coefficient'], ['date', 'Date'], ['status', 'Statut']] }
 });
 
 // La date de la note tombe dans une période clôturée de son établissement (expression SQL réutilisable).
@@ -88,6 +96,8 @@ router.post('/:id/corrections', requireWrite('grades'), wrap(async (req, res) =>
   if (!isUuid(req.params.id)) throw new HttpError(400, 'Identifiant invalide.');
   const newScore = Number(req.body && req.body.score);
   if (!(Number.isFinite(newScore) && newScore >= 0 && newScore <= 20)) throw new HttpError(400, 'Note invalide (entre 0 et 20).');
+  const max = await scaleMax(req.tenantId);
+  if (newScore > max) throw new HttpError(400, `La note ne peut pas dépasser ${max} (barème de l’établissement).`);
   const reason = checkMotif(req.body && req.body.reason);
   const g = await db.query('SELECT status, score FROM grades WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenantId]);
   if (!g.rows.length) throw new HttpError(404, 'Note introuvable.');

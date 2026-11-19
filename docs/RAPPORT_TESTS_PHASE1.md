@@ -75,3 +75,32 @@ TEST_DATABASE_URL=postgres://USER:PASS@localhost:5432/school_manager_pro_test np
 ```
 
 Attention : la suite d'intégration supprime et recrée le schéma `public` de la base de test.
+
+## 7. Mise à jour du 19/11/2026 : barème, recette destinataire, mise à niveau
+
+### 7.1 Barème configurable par établissement (§5.1) — À tester
+- Migration `032_grading_scale.sql` (additive) : `tenants.grade_scale_max` (10 ou 20, défaut 20), trigger `grades_scale_check` qui refuse toute note au-dessus du barème, quel que soit le chemin d’écriture.
+- API : `GET /api/settings/grading` (tout utilisateur connecté), `PUT /api/settings/grading` (administrateur ; valeur strictement 10 ou 20 ; 409 si une note dépasse le nouveau barème).
+- Saisie et demandes de correction refusées au-dessus du barème (400). Libellés du formulaire et du tableau « Moyennes par matière » adaptés.
+- Bulletins : mentions restent sur 20 (moyennes normalisées), en-tête du PDF indique le barème de l’établissement.
+- Intégration : 104/104 (5 tests barème). Unitaires : 25/25. Recette Phase 1 navigateur : 18/18.
+- Navigateur (vérification ponctuelle) : carte « Barème des notes » dans Paramètres, libellé « Note (sur 20) », message clair en cas de refus 409 ; aucune erreur JavaScript.
+
+### 7.2 Recette navigateur de la messagerie côté destinataire — Réalisé et vérifié
+Script : `tests/browser/recette-messagerie.js` (9/9) : l’expéditeur crée une conversation et envoie un message ; le destinataire se connecte, ouvre la conversation, le message s’affiche, les appels `receive` et `read` répondent 200 ; l’expéditeur voit « 1 lu sur 1 » ; aucune erreur JavaScript ; un utilisateur non participant ne voit aucun message (200, liste vide).
+
+### 7.3 Mise à niveau depuis une copie de base réelle — Partiel, décision requise
+Protocole : base `smp_upgrade_test` (jetable). Application de `origin/main` (migrations 001→025), création de données via l’API de la version main (8 élèves, 32 notes, une conversation avec un message) et relevé du bulletin. Puis application des migrations 026→032 de la branche et redémarrage du serveur.
+
+Résultats :
+- Aucune ligne perdue : tous les volumes sont identiques avant/après ; nouvelles tables vides (`conversation_participants` backfillée à 1, `message_receipts`, `grade_corrections`).
+- Migrations 026→032 appliquées sans erreur ; trigger de barème présent ; barème = 20 par défaut.
+- **Anomalie bloquante avant fusion** : les 32 notes existantes restent en `saisie` (l’ancien schéma n’avait pas de validation). Le bulletin de l’élève test passe de 4 matières (moyennes 6 à 16) à 0 matière. Le bulletin ne prend en compte que les notes `validee`.
+- Le message antérieur à la mise à niveau n’a pas d’accusé (0/0) : attendu, les accusés ne sont créés qu’à l’envoi.
+
+Options à décider par l’établissement (aucune n’a été appliquée) :
+1. Valider automatiquement les notes existantes par une migration corrective, avec trace d’audit (recommandé si ces notes ont déjà servi aux bulletins).
+2. Laisser les notes en `saisie` et demander une validation en masse par l’administrateur après mise à niveau.
+3. Prendre en compte les notes héritées dans les bulletins par un indicateur dédié.
+
+Tant que ce point n’est pas tranché, la branche ne doit pas être fusionnée dans `main`.

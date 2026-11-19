@@ -55,8 +55,12 @@ async function loadReportCard(tenantId, id, f = {}) {
        FROM grades g WHERE g.tenant_id = $1 AND g.student_id = $${sid} AND g.status = 'validee'${period}
       GROUP BY g.subject ORDER BY g.subject`, params);
   const toNum = (v) => (v === null || v === undefined ? null : Math.round(Number(v) * 100) / 100);
+  // Barème de l'établissement (10 ou 20) : les mentions restent définies sur 20.
+  const sc = await db.query('SELECT grade_scale_max FROM tenants WHERE id = $1', [tenantId]);
+  const scale = Number(sc.rows[0] && sc.rows[0].grade_scale_max) || 20;
+  const onTwenty = (v) => (v === null || v === undefined ? null : (v * 20) / scale);
   let overall = null; let rank = null; let classSize = null;
-  const rowsOut = subjects.rows.map((r) => ({ subject: r.subject, average: toNum(r.average), coefficient: Number(r.coefficient), notes: Number(r.notes), mention: mention(toNum(r.average)) }));
+  const rowsOut = subjects.rows.map((r) => ({ subject: r.subject, average: toNum(r.average), coefficient: Number(r.coefficient), notes: Number(r.notes), mention: mention(onTwenty(toNum(r.average))) }));
   if (rowsOut.length) {
     const sumCoef = rowsOut.reduce((a, r) => a + r.coefficient, 0);
     overall = toNum(rowsOut.reduce((a, r) => a + r.average * r.coefficient, 0) / sumCoef);
@@ -76,7 +80,7 @@ async function loadReportCard(tenantId, id, f = {}) {
     if (mine) rank = 1 + avgs.filter((a) => a.avg > mine.avg).length;
   }
   const cm = await db.query('SELECT teacher_comment, council_decision, updated_at FROM report_card_comments WHERE tenant_id = $1 AND student_id = $2 AND period_key = $3', [tenantId, st.id, periodKey(f)]);
-  return { student: st, comment: cm.rows[0] || { teacher_comment: null, council_decision: null }, period: { from: f.from || null, to: f.to || null }, subjects: rowsOut, overall_average: overall, rank, class_size: classSize, mention: overall === null ? null : mention(overall) };
+  return { student: st, comment: cm.rows[0] || { teacher_comment: null, council_decision: null }, period: { from: f.from || null, to: f.to || null }, subjects: rowsOut, overall_average: overall, rank, class_size: classSize, mention: overall === null ? null : mention(onTwenty(overall)), grade_scale_max: scale };
 }
 
 module.exports = { mention, periodKey, loadProfile, loadReportCard };

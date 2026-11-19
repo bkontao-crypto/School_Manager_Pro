@@ -1658,6 +1658,60 @@ if (!TEST_URL) {
       });
     });
 
+    describe('Barème des notes par établissement (§5.1)', () => {
+      const PWD = 'Bareme-Pass-2026';
+      let tok; let stu; let tid;
+      before(async () => {
+        const c = await api('POST', '/api/platform/tenants', { token: tokens.root, body: { code: 'BAREME', name: 'École Barème', admin_email: 'dir@bareme.test', admin_full_name: 'Directeur Barème', admin_password: PWD } });
+        assert.equal(c.status, 201, c.text);
+        tok = await login('dir@bareme.test', 'BAREME', PWD);
+        tid = (await pool.query("SELECT id FROM tenants WHERE code='BAREME'")).rows[0].id;
+        stu = (await api('POST', '/api/students', { token: tok, body: { matricule: 'BAR-1', first_name: 'Bar', last_name: 'Eme' } })).json.data.id;
+      });
+
+      it('par défaut le barème est 20 ; lecture ouverte à tout utilisateur connecté', async () => {
+        const r = await api('GET', '/api/settings/grading', { token: tok });
+        assert.equal(r.status, 200);
+        assert.equal(r.json.data.grade_scale_max, 20);
+        assert.equal((await api('GET', '/api/settings/grading', { token: tokens.userA })).status, 200);
+        assert.equal((await api('GET', '/api/settings/grading')).status, 401);
+      });
+
+      it('seul l’administrateur modifie le barème ; valeur strictement 10 ou 20', async () => {
+        assert.equal((await api('PUT', '/api/settings/grading', { token: tokens.teacherA, body: { grade_scale_max: 10 } })).status, 403);
+        assert.equal((await api('PUT', '/api/settings/grading', { token: tok, body: { grade_scale_max: 15 } })).status, 400);
+        assert.equal((await api('PUT', '/api/settings/grading', { token: tok, body: { grade_scale_max: '10' } })).status, 400);
+        assert.equal((await api('PUT', '/api/settings/grading', { token: tok, body: {} })).status, 400);
+      });
+
+      it('sur 10 : une note au-dessus est refusée à la saisie et à l’insertion directe ; une note valide passe', async () => {
+        assert.equal((await api('PUT', '/api/settings/grading', { token: tok, body: { grade_scale_max: 10 } })).status, 200);
+        const over = await api('POST', '/api/grades', { token: tok, body: { student_id: stu, subject: 'Maths', score: 15, coefficient: 1 } });
+        assert.equal(over.status, 400, over.text);
+        assert.match(over.text, /barème/);
+        const ok = await api('POST', '/api/grades', { token: tok, body: { student_id: stu, subject: 'Maths', score: 8, coefficient: 1 } });
+        assert.equal(ok.status, 201, ok.text);
+        const direct = await pool.query('INSERT INTO grades (tenant_id, student_id, subject, score, coefficient, status) VALUES ($1,$2,$3,14,1,$4)', [tid, stu, 'Histoire', 'saisie']).then(() => 'inserted', (e) => e.message);
+        assert.match(direct, /barème/, 'le trigger doit refuser une insertion directe au-dessus du barème');
+      });
+
+      it('retour à 20 accepté ; repassage à 10 refusé tant qu’une note dépasse 10', async () => {
+        assert.equal((await api('PUT', '/api/settings/grading', { token: tok, body: { grade_scale_max: 20 } })).status, 200);
+        assert.equal((await api('POST', '/api/grades', { token: tok, body: { student_id: stu, subject: 'Physique', score: 15, coefficient: 1 } })).status, 201);
+        const blocked = await api('PUT', '/api/settings/grading', { token: tok, body: { grade_scale_max: 10 } });
+        assert.equal(blocked.status, 409, blocked.text);
+        assert.equal((await api('GET', '/api/settings/grading', { token: tok })).json.data.grade_scale_max, 20);
+      });
+
+      it('le bulletin lit le barème de l’établissement et normalise les mentions sur 20', async () => {
+        await pool.query('UPDATE tenants SET grade_scale_max = 10 WHERE id = $1', [tid]);
+        const { loadReportCard } = require('../../backend/src/utils/studentData.js');
+        const d = await loadReportCard(tid, stu, {});
+        assert.equal(d.grade_scale_max, 10);
+        await pool.query('UPDATE tenants SET grade_scale_max = 20 WHERE id = $1', [tid]);
+      });
+    });
+
     describe('Portail parent', () => {
       const mkStudent = async (token, mat, name) => (await api('POST', '/api/students', { token, body: { matricule: mat, first_name: name, last_name: 'Portail' } })).json.data.id;
       let s1; let s2; let s3; let pA; let pB; let tokP1; let tokP2;

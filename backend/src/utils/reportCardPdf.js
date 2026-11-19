@@ -27,7 +27,7 @@ function renderReportCard(data, schoolName) {
   const head = () => {
     pdf.rect(L, y - 6, R - L, 22, { fill: 0.9 });
     pdf.text(cols[0], y, 'Matière', { size: 10, bold: true }); pdf.text(cols[1], y, 'Coef.', { size: 10, bold: true }); pdf.text(cols[2], y, 'Nb notes', { size: 10, bold: true });
-    pdf.text(cols[3], y, 'Moyenne /20', { size: 10, bold: true, align: 'right' }); pdf.text(cols[4], y, 'Appréciation', { size: 10, bold: true, align: 'right' });
+    pdf.text(cols[3], y, `Moyenne /${data.grade_scale_max || 20}`, { size: 10, bold: true, align: 'right' }); pdf.text(cols[4], y, 'Appréciation', { size: 10, bold: true, align: 'right' });
     y -= 24;
   };
   head();
@@ -43,7 +43,7 @@ function renderReportCard(data, schoolName) {
   if (y < 260) { pdf.addPage(); header(); y = pdf.height - 105; }
   y -= 24;
   const boxW = (R - L - 20) / 3;
-  [['Moyenne générale', data.overall_average === null ? '-' : `${fmt(data.overall_average)} / 20`], ['Rang dans la classe', data.rank ? `${data.rank} / ${data.class_size}` : '-'], ['Mention', data.mention || '-']].forEach(([k, v], i) => {
+  [['Moyenne générale', data.overall_average === null ? '-' : `${fmt(data.overall_average)} / ${data.grade_scale_max || 20}`], ['Rang dans la classe', data.rank ? `${data.rank} / ${data.class_size}` : '-'], ['Mention', data.mention || '-']].forEach(([k, v], i) => {
     const x = L + i * (boxW + 10);
     pdf.rect(x, y - 38, boxW, 50, { fill: 0.96, stroke: 0.8 });
     pdf.text(x + 10, y - 2, k, { size: 9, gray: 0.4 }); pdf.text(x + 10, y - 26, v, { size: 15, bold: true });

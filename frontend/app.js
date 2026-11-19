@@ -485,7 +485,7 @@ const MODULES = {
     fields: [{ name: 'name', label: 'Nom de la classe', required: true }, { name: 'level', label: 'Niveau' }, { name: 'school_year', label: 'Année scolaire (ex. 2026-2027)' }, { name: 'max_students', label: 'Effectif maximum', type: 'number' }],
     columns: [['name', 'Classe'], ['level', 'Niveau'], ['school_year', 'Année scolaire'], ['max_students', 'Effectif max.']] },
   grades: { title: 'Notes', endpoint: '/api/grades', writeRoles: ['admin', 'teacher'],
-    fields: [{ name: 'student_id', label: 'Élève', type: 'student', required: true }, { name: 'subject', label: 'Matière', required: true }, { name: 'score', label: 'Note (sur 20)', type: 'number', required: true }, { name: 'evaluation_type', label: 'Type d’évaluation (devoir, composition…)' }, { name: 'coefficient', label: 'Coefficient', type: 'number' }],
+    fields: [{ name: 'student_id', label: 'Élève', type: 'student', required: true }, { name: 'subject', label: 'Matière', required: true }, { name: 'score', label: 'Note', type: 'number', required: true }, { name: 'evaluation_type', label: 'Type d’évaluation (devoir, composition…)' }, { name: 'coefficient', label: 'Coefficient', type: 'number' }],
     columns: [['student_name', 'Élève'], ['subject', 'Matière'], ['evaluation_type', 'Évaluation'], ['score', 'Note'], ['status', 'Statut', label]] },
   attendances: { title: 'Présences', endpoint: '/api/attendances', writeRoles: ['admin', 'teacher'],
     fields: [{ name: 'student_id', label: 'Élève', type: 'student', required: true }, { name: 'class_id', label: 'Classe', type: 'class', clearable: true }, { name: 'date', label: 'Date', type: 'date', required: true },
@@ -527,6 +527,9 @@ const canWrite = (key) => permOf(key) === 'write';
 const PAGE = 20;
 const listState = { key: null, offset: 0, q: '' };
 
+// Barème de l'établissement (10 ou 20), chargé à l'ouverture du module notes.
+let gradeScaleMax = 20;
+
 async function openModule(key, opts = {}) {
   const cfg = MODULES[key];
   setActiveNav(key);
@@ -542,6 +545,11 @@ async function openModule(key, opts = {}) {
   const EXPORTABLE = { students: 'eleves.csv', grades: 'notes.csv', payments: 'paiements.csv' };
   if (listState.key !== key) { listState.key = key; listState.offset = 0; listState.q = ''; }
   const writable = canWrite(key);
+  if (key === 'grades') {
+    try { gradeScaleMax = (await get('/api/settings/grading')).data.grade_scale_max; } catch (e) { gradeScaleMax = 20; }
+    const scoreField = cfg.fields.find((f) => f.name === 'score');
+    if (scoreField) scoreField.label = `Note (sur ${gradeScaleMax})`;
+  }
   moduleView.innerHTML = `<div class="flex flex-wrap items-center justify-between gap-3"><div><p class="text-sm text-slate-500">Gestion scolaire</p><h2 class="text-2xl font-bold text-slate-900">${cfg.title}</h2></div>
     <div class="flex flex-wrap gap-2">${cfg.search ? '<input id="module-q" type="search" placeholder="Nom ou matricule…" class="w-full sm:w-auto rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" aria-label="Filtrer la liste">' : ''}
     <button id="module-refresh" class="px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 text-sm font-semibold"><i class="fa-solid fa-rotate mr-2"></i>Actualiser</button>
@@ -609,7 +617,7 @@ async function openModule(key, opts = {}) {
               return;
             }
             if (btn.dataset.act === 'correct') {
-              const sent = await formModal({ title: 'Demande de correction', fields: [{ name: 'score', label: 'Nouvelle note (sur 20)', type: 'number', required: true }, { name: 'reason', label: 'Motif (obligatoire)', required: true }], submit: 'Envoyer la demande', onSubmit: (v) => api('POST', `/api/grades/${encodeURIComponent(item.id)}/corrections`, v) });
+              const sent = await formModal({ title: 'Demande de correction', fields: [{ name: 'score', label: `Nouvelle note (sur ${gradeScaleMax})`, type: 'number', required: true }, { name: 'reason', label: 'Motif (obligatoire)', required: true }], submit: 'Envoyer la demande', onSubmit: (v) => api('POST', `/api/grades/${encodeURIComponent(item.id)}/corrections`, v) });
               if (sent) { toast('Demande envoyée à l’administrateur.'); refresh(); }
               return;
             }
@@ -807,7 +815,7 @@ async function openReports() {
       ${reportTable('Élèves par classe', ['Classe', 'Effectif'], d.students_by_class, (x) => `<tr class="border-b"><td class="py-2 pr-3">${escapeHtml(x.label)}</td><td class="py-2">${fmtNumber(x.total)}</td></tr>`)}
       ${reportTable('Encaissements par type de frais', ['Frais', 'Paiements', 'Montant'], d.payments_by_fee, (x) => `<tr class="border-b"><td class="py-2 pr-3">${escapeHtml(x.label)}</td><td class="py-2 pr-3">${fmtNumber(x.count)}</td><td class="py-2">${money(x.total)}</td></tr>`)}
       ${reportTable('Présences — 30 derniers jours', ['Statut', 'Nombre'], d.attendance_30d, (x) => `<tr class="border-b"><td class="py-2 pr-3">${escapeHtml(label(x.label))}</td><td class="py-2">${fmtNumber(x.total)}</td></tr>`)}
-      ${reportTable('Moyennes par matière (sur 20)', ['Matière', 'Moyenne', 'Notes'], d.grades_by_subject, (x) => `<tr class="border-b"><td class="py-2 pr-3">${escapeHtml(x.label)}</td><td class="py-2 pr-3 font-semibold">${String(x.average).replace('.', ',')}</td><td class="py-2">${fmtNumber(x.count)}</td></tr>`)}</div>`;
+      ${reportTable(`Moyennes par matière (sur ${d.grade_scale_max || 20})`, ['Matière', 'Moyenne', 'Notes'], d.grades_by_subject, (x) => `<tr class="border-b"><td class="py-2 pr-3">${escapeHtml(x.label)}</td><td class="py-2 pr-3 font-semibold">${String(x.average).replace('.', ',')}</td><td class="py-2">${fmtNumber(x.count)}</td></tr>`)}</div>`;
     $('rep-print').addEventListener('click', () => window.print());
     $('rep-csv').addEventListener('click', async () => {
       const q = new URLSearchParams(); if ($('rep-from').value) q.set('from', $('rep-from').value); if ($('rep-to').value) q.set('to', $('rep-to').value);
@@ -852,6 +860,10 @@ async function setupPermissions() {
 }
 
 // ---------------------------------------------------------------- Paramètres
+function gradingSectionHtml() {
+  return `<section class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-2">Barème des notes</h3><p class="text-sm text-slate-500 mb-3">Barème de l’établissement. Les mentions des bulletins restent définies sur 20. Le changement est refusé tant qu’une note dépasse le nouveau barème.</p><div class="flex flex-wrap items-center gap-2"><select id="grading-scale" class="rounded-lg border border-slate-200 px-3 py-2 text-sm"><option value="20">Sur 20</option><option value="10">Sur 10</option></select><button id="grading-save" type="button" class="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white">Enregistrer</button></div></section>`;
+}
+
 async function openSettings() {
   const isAdmin = session.user && ['admin', 'superadmin'].includes(session.user.role);
   const canReopen = isAdmin || session.user.role === 'gerant';
@@ -862,6 +874,7 @@ async function openSettings() {
     <section class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-3">Établissement</h3><p class="text-sm text-slate-500">Code de connexion : <strong class="text-slate-800">${escapeHtml(tenant.code)}</strong> · Statut : ${escapeHtml(tenant.status || '—')}</p>
       <p class="mt-2 text-sm">Nom : <strong id="tenant-name">${escapeHtml(tenant.name)}</strong> ${isAdmin ? '<button id="tenant-edit" class="ml-2 text-blue-600 hover:underline text-sm">Modifier</button>' : ''}</p></section>
     <section class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-3">Mon compte</h3><p class="text-sm text-slate-500">${escapeHtml(session.user.email)} · ${escapeHtml(ROLE_LABELS[session.user.role] || session.user.role)}</p><button id="pwd-btn" class="mt-3 px-4 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700">Changer mon mot de passe</button></section>
+    ${isAdmin ? gradingSectionHtml() : ''}
     ${isAdmin ? bannerSectionHtml() + identitySectionHtml(false) + subscriptionSectionHtml() + permissionsSectionHtml() : ''}
     ${canReopen ? `<section class="bg-white rounded-2xl border border-slate-200 p-5"><div class="flex items-center justify-between mb-3"><h3 class="font-bold">Périodes scolaires (trimestres)</h3>${isAdmin ? `<button id="period-add" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-2"></i>Ajouter</button>` : ''}</div><div id="periods-list" class="text-sm space-y-2"></div><p class="mt-3 text-xs text-slate-400">Les périodes servent à filtrer les bulletins.</p></section>
     ${isAdmin ? `<section id="corrections-card" class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-3">Corrections de notes en attente</h3><div id="corrections-list" class="text-sm"></div></section>` : ''}
@@ -947,6 +960,15 @@ async function openSettings() {
       users = rows(await get('/api/users?limit=200'));
       tbody.innerHTML = users.map((u) => `<tr class="border-b border-slate-100"><td class="py-2.5 pr-3">${escapeHtml(u.full_name)}</td><td class="py-2.5 pr-3">${escapeHtml(u.email)}</td><td class="py-2.5 pr-3">${escapeHtml(ROLE_LABELS[u.role] || u.role)}</td><td class="py-2.5 pr-3 text-slate-500">${u.last_login_at ? new Date(u.last_login_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : 'Jamais'}</td><td class="py-2.5 pr-3">${u.is_active ? '<span class="text-emerald-700">Actif</span>' : '<span class="text-slate-400">Désactivé</span>'}</td><td class="py-2.5 text-right whitespace-nowrap">${u.id === session.user.id ? '<span class="text-xs text-slate-400">Vous</span>' : `${u.role === 'parent' ? '' : `<button type="button" data-user-role="${escapeHtml(u.id)}" class="text-blue-600 hover:underline mr-3">Rôle</button>`}<button type="button" data-user-pwd="${escapeHtml(u.id)}" class="text-blue-600 hover:underline mr-3">Mot de passe</button><button type="button" data-user-toggle="${escapeHtml(u.id)}" class="${u.is_active ? 'text-red-600' : 'text-emerald-700'} hover:underline">${u.is_active ? 'Désactiver' : 'Réactiver'}</button>`}</td></tr>`).join('');
     } catch (e) { tbody.innerHTML = `<tr><td colspan="6" class="py-4 text-red-500">${escapeHtml(e.message)}</td></tr>`; }
+  }
+  if (isAdmin) {
+    get('/api/settings/grading').then((d) => { $('grading-scale').value = String(d.data.grade_scale_max); }).catch(() => {});
+    $('grading-save').addEventListener('click', async () => {
+      try {
+        const d = await api('PUT', '/api/settings/grading', { grade_scale_max: Number($('grading-scale').value) });
+        gradeScaleMax = d.data.grade_scale_max; toast('Barème enregistré.');
+      } catch (e) { toast(e.message, 'err'); }
+    });
   }
   // Comptes : réservés à l'administrateur (l'API refuse /api/users aux autres rôles) ; la section est retirée pour les autres.
   if (!isAdmin) document.getElementById('users-rows')?.closest('section')?.remove();
