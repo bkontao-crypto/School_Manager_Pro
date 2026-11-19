@@ -113,3 +113,13 @@ Décision de l’établissement : option 1 (validation automatique des notes exi
 - Intégration sur base vide (001→033) : 104/104.
 - Note : une première rédaction de la migration n’avait rien mis à jour (lecture et écriture dans la même instruction). Elle n’était ni commitée ni déployée ; elle a été corrigée et rejouée sur la copie de test, dont l’état a été remis à l’avant-033.
 - Reste à faire : refaire cette mise à niveau sur une base réelle sauvegardée avant la fusion ; vérifier que l’établissement accepte que ces notes deviennent validées.
+
+### 7.5 Répétition de mise à niveau après sauvegarde et restauration — Réalisé et vérifié (copie de test)
+Protocole (19/11/2026) :
+1. Base de répétition au schéma `origin/main` (001→025), peuplée comme la copie précédente (8 élèves, 32 notes, 1 message).
+2. Sauvegarde avec `scripts/backup.js` de la branche (fichier `smp_rehearsal_test_2026-11-19-09-11.sql.gz`, 14,2 Ko).
+3. Restauration avec `scripts/restore.js --confirm` dans une base vierge : volumes identiques à la source.
+4. Application des migrations 026→033 avec `scripts/migrate.js` : 8 migrations appliquées ; relance sans effet.
+5. Serveur de la branche sur la base restaurée : bulletin de l’élève test à 4 matières (moyennes 11, 6, 6, 16) ; 32 notes `validee` ; 32 statuts d’origine conservés ; 1 entrée d’audit `grade.backfill_validated` ; barème 20 ; message présent.
+
+Limites : il s’agit d’une copie de test alimentée par l’API de la version `main`, pas d’une base de production. La mise à niveau d’une base réelle reste à faire après sauvegarde sur le serveur de l’établissement.
