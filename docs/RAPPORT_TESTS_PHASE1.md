@@ -138,3 +138,12 @@ Limites : il s’agit d’une copie de test alimentée par l’API de la version
 - Correction pendant la vérification : date du pied de page de la facture affichée au format brut.
 - Tests : unitaires 29/29 (ajout : reçu, facture, avoir, format de date du pied) ; intégration 104/104.
 - Vérification visuelle : reçu encaissé, reçu annulé, facture en attente, avoir.
+
+### 7.8 Logo de l’établissement dans les documents — Réalisé et vérifié
+- Décodage sans dépendance (`backend/src/utils/imageDecode.js`) : PNG (filtres de ligne, palettes, 1 à 16 bits, transparence) décodé vers RGB + canal alpha ; JPEG intégré tel quel ; WebP et formats non pris en charge refusés (le document s’affiche sans logo).
+- Moteur PDF : `image()` pour intégrer les images (XObject, masque alpha).
+- Chargement (`backend/src/utils/brandLogo.js`) : logo de l’établissement pour le bulletin, le reçu et les factures de l’établissement ; logo de la plateforme pour les factures d’abonnement (émetteur).
+- Affichage : vignette blanche arrondie à gauche du bandeau, nom de l’établissement décalé.
+- Tests unitaires 32/32 (PNG RGBA, palette avec tRNS, filtre Sub, JPEG, WebP refusé, XObject). Intégration 108/108 : sans logo, logo valide intégré, logo illisible sans échec de génération, suppression.
+- Vérification visuelle : bulletin, reçu avec logo PNG semi-transparent. Palette à transparence et JPEG vérifiés séparément.
+- Limite connue : les factures et les reçus longs ne sont pas paginés automatiquement (cas courants : une page).

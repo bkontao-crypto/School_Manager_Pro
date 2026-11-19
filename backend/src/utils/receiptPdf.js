@@ -3,6 +3,7 @@
 const db = require('./db');
 const { Pdf, wrap, textWidth } = require('./pdf');
 const { C, MARGIN, band, pill, footer } = require('./pdfTheme');
+const { loadTenantLogo } = require('./brandLogo');
 const { amountInWords } = require('./amountWords');
 
 const money = (n) => `${new Intl.NumberFormat('fr-FR').format(Math.round(Number(n))).replace(/[  ]/g, ' ')} F CFA`;
@@ -16,13 +17,14 @@ async function loadReceipt(tenantId, paymentId) {
        FROM payments p JOIN students s ON s.tenant_id = p.tenant_id AND s.id = p.student_id
        LEFT JOIN classes c ON c.tenant_id = s.tenant_id AND c.id = s.class_id JOIN tenants t ON t.id = p.tenant_id
       WHERE p.id = $1 AND p.tenant_id = $2`, [paymentId, tenantId]);
-  return r.rows[0] || null;
+  if (!r.rows[0]) return null;
+  return { ...r.rows[0], logo: await loadTenantLogo(tenantId) };
 }
 
 function renderReceipt(x) {
   const pdf = new Pdf(); const L = MARGIN; const R = pdf.width - MARGIN; const CW = R - L; const annule = x.status === 'annule';
   const school = x.school_name || 'Établissement';
-  let y = band(pdf, { org: school, subtitle: 'Établissement scolaire', title: 'REÇU DE PAIEMENT', titleSub: x.receipt_number || '' }) - 28;
+  let y = band(pdf, { org: school, subtitle: 'Établissement scolaire', title: 'REÇU DE PAIEMENT', titleSub: x.receipt_number || '', logo: x.logo }) - 28;
 
   // Carte élève
   pdf.rect(L, y - 56, CW, 56, { fill: C.panel, stroke: C.border, radius: 8 });

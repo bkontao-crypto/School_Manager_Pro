@@ -58,7 +58,7 @@ function rectPath(x, y, w, h, r = 0) {
 }
 
 class Pdf {
-  constructor() { this.pages = []; this.width = 595.28; this.height = 841.89; this.addPage(); }
+  constructor() { this.pages = []; this.images = []; this.width = 595.28; this.height = 841.89; this.addPage(); }
   addPage() { this.cur = []; this.pages.push(this.cur); return this; }
   // Revient à une page existante (pieds de page écrits une fois le nombre de pages connu).
   goto(index) { this.cur = this.pages[index]; return this; }
@@ -85,6 +85,13 @@ class Pdf {
     return this;
   }
   // Ligne brisée : points [[x, y], …].
+  // Image (voir imageDecode.js) placée dans le rectangle (x, y) — coin bas-gauche — largeur × hauteur.
+  image(x, y, w, h, img) {
+    if (!img) return this;
+    this.images.push(img);
+    this.cur.push(`q ${num(w)} 0 0 ${num(h)} ${num(x)} ${num(y)} cm /Im${this.images.length} Do Q`);
+    return this;
+  }
   polyline(points, { color = 0, width = 1 } = {}) {
     const [first, ...rest] = points;
     const d = [`${num(first[0])} ${num(first[1])} m`, ...rest.map(([x, y]) => `${num(x)} ${num(y)} l`)].join(' ');
@@ -114,11 +121,21 @@ class Pdf {
     const catalog = add(''); const pagesRoot = add('');
     const f1 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
     const f2 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+    const streamObj = (dict, content) => Buffer.concat([Buffer.from(`<< ${dict} /Length ${content.length} >>\nstream\n`, 'latin1'), content, Buffer.from('\nendstream')]);
+    const imgIds = this.images.map((img) => {
+      if (img.kind === 'jpeg') {
+        return add(streamObj(`/Type /XObject /Subtype /Image /Width ${img.width} /Height ${img.height} /ColorSpace /${img.cs} /BitsPerComponent 8 /Filter /DCTDecode`, img.data));
+      }
+      const dims = `/Type /XObject /Subtype /Image /Width ${img.width} /Height ${img.height} /BitsPerComponent 8`;
+      const smask = img.alpha ? add(streamObj(`${dims} /ColorSpace /DeviceGray /Filter /FlateDecode`, zlib.deflateSync(img.alpha))) : null;
+      return add(streamObj(`${dims} /ColorSpace /DeviceRGB /Filter /FlateDecode${smask ? ` /SMask ${smask} 0 R` : ''}`, zlib.deflateSync(img.rgb)));
+    });
+    const xobjects = this.images.length ? ` /XObject << ${this.images.map((_, i) => `/Im${i + 1} ${imgIds[i]} 0 R`).join(' ')} >>` : '';
     const kids = [];
     for (const ops of this.pages) {
       const content = zlib.deflateSync(Buffer.from(ops.join('\n'), 'latin1'));
       const c = add(Buffer.concat([Buffer.from(`<< /Length ${content.length} /Filter /FlateDecode >>\nstream\n`), content, Buffer.from('\nendstream')]));
-      kids.push(add(`<< /Type /Page /Parent ${pagesRoot} 0 R /MediaBox [0 0 ${num(this.width)} ${num(this.height)}] /Resources << /Font << /F1 ${f1} 0 R /F2 ${f2} 0 R >> >> /Contents ${c} 0 R >>`));
+      kids.push(add(`<< /Type /Page /Parent ${pagesRoot} 0 R /MediaBox [0 0 ${num(this.width)} ${num(this.height)}] /Resources << /Font << /F1 ${f1} 0 R /F2 ${f2} 0 R >>${xobjects} >> /Contents ${c} 0 R >>`));
     }
     objs[catalog - 1] = `<< /Type /Catalog /Pages ${pagesRoot} 0 R >>`;
     objs[pagesRoot - 1] = `<< /Type /Pages /Kids [${kids.map((k) => `${k} 0 R`).join(' ')}] /Count ${kids.length} >>`;

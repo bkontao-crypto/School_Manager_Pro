@@ -10,12 +10,21 @@ const C = {
 const MARGIN = 40;
 
 // Bandeau de marque en haut de page ; renvoie l'ordonnée du bas du bandeau (filet d'accent compris).
-function band(pdf, { org = '', subtitle = '', title = '', titleSub = '', height = 96 } = {}) {
+// Logo dans une vignette blanche arrondie, à gauche du bandeau ; renvoie la largeur occupée.
+function drawLogo(pdf, logo, x, yTop, size = 54) {
+  if (!logo) return 0;
+  pdf.rect(x, yTop - size - 12, size + 12, size + 12, { fill: C.white, radius: 10 });
+  pdf.image(x + 6, yTop - size - 6, size, size, logo);
+  return size + 12 + 14;
+}
+
+function band(pdf, { org = '', subtitle = '', title = '', titleSub = '', height = 96, logo = null } = {}) {
   const W = pdf.width; const H = pdf.height; const R = W - MARGIN;
   pdf.rect(0, H - height, W, height, { fill: C.brand });
   pdf.rect(0, H - height - 4, W, 4, { fill: C.accent });
-  pdf.text(MARGIN, H - 42, org, { size: 18, bold: true, color: C.white });
-  if (subtitle) pdf.text(MARGIN, H - 62, subtitle, { size: 9.5, bold: true, color: C.headLight });
+  const dx = drawLogo(pdf, logo, MARGIN, H - 18, 54);
+  pdf.text(MARGIN + dx, H - 42, org, { size: 18, bold: true, color: C.white });
+  if (subtitle) pdf.text(MARGIN + dx, H - 62, subtitle, { size: 9.5, bold: true, color: C.headLight });
   if (title) pdf.text(R, H - 42, title, { size: 13, bold: true, color: C.white, align: 'right' });
   if (titleSub) pdf.text(R, H - 62, titleSub, { size: 9.5, color: C.headLight, align: 'right' });
   return H - height - 4;
@@ -51,4 +60,4 @@ function footer(pdf, { text = '', legal = [] } = {}) {
   }
 }
 
-module.exports = { C, MARGIN, band, card, pill, footer };
+module.exports = { C, MARGIN, band, card, pill, footer, drawLogo };

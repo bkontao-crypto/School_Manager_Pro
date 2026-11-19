@@ -1714,6 +1714,43 @@ if (!TEST_URL) {
       });
     });
 
+    describe('Logo de l’établissement dans les bulletins (charte PDF)', () => {
+      const zlib = require('node:zlib');
+      const realPng = (w, h) => {
+        const chunk = (type, data) => { const b = Buffer.alloc(12 + data.length); b.writeUInt32BE(data.length, 0); b.write(type, 4, 'latin1'); data.copy(b, 8); return b; };
+        const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 2;
+        const rows = Buffer.alloc(h * (1 + w * 3), 120); for (let y = 0; y < h; y++) rows[y * (1 + w * 3)] = 0;
+        return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(rows)), chunk('IEND', Buffer.alloc(0))]);
+      };
+      const bulletin = async () => { const r = await fetch(`${base}/api/students/${sid}/report-card.pdf`, { headers: { Authorization: `Bearer ${tokens.adminA}` } }); return { status: r.status, txt: Buffer.from(await r.arrayBuffer()).toString('latin1') }; };
+      let sid;
+      before(async () => { sid = (await api('POST', '/api/students', { token: tokens.adminA, body: { matricule: 'LOGO-1', first_name: 'Logo', last_name: 'Eleve' } })).json.data.id; });
+
+      it('sans logo : bulletin généré, sans image', async () => {
+        const r = await bulletin();
+        assert.equal(r.status, 200); assert.ok(!r.txt.includes('/Subtype /Image'));
+      });
+
+      it('logo PNG valide : bulletin avec image intégrée', async () => {
+        assert.equal((await api('PUT', '/api/settings/identity/logo', { token: tokens.adminA, raw: realPng(128, 128), headers: { 'Content-Type': 'image/png' } })).status, 200);
+        const r = await bulletin();
+        assert.equal(r.status, 200); assert.ok(r.txt.includes('/Subtype /Image'));
+      });
+
+      it('logo illisible en base : bulletin tout de même généré, sans image', async () => {
+        await pool.query("UPDATE tenant_identity SET logo = $2 WHERE tenant_id = $1", [TA, Buffer.from('données corrompues sans signature')]);
+        const r = await bulletin();
+        assert.equal(r.status, 200); assert.ok(!r.txt.includes('/Subtype /Image'));
+      });
+
+      it('suppression du logo : retour au bulletin sans image', async () => {
+        assert.equal((await api('PUT', '/api/settings/identity/logo', { token: tokens.adminA, raw: realPng(128, 128), headers: { 'Content-Type': 'image/png' } })).status, 200);
+        assert.equal((await api('DELETE', '/api/settings/identity/logo', { token: tokens.adminA })).status, 200);
+        const r = await bulletin();
+        assert.equal(r.status, 200); assert.ok(!r.txt.includes('/Subtype /Image'));
+      });
+    });
+
     describe('Portail parent', () => {
       const mkStudent = async (token, mat, name) => (await api('POST', '/api/students', { token, body: { matricule: mat, first_name: name, last_name: 'Portail' } })).json.data.id;
       let s1; let s2; let s3; let pA; let pB; let tokP1; let tokP2;

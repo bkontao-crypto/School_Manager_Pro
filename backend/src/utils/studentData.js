@@ -2,6 +2,7 @@
 // Chaque fonction exige explicitement l'établissement ; le contrôle d'accès (qui a le droit de voir cet élève) reste à l'appelant.
 
 const db = require('./db');
+const { loadTenantLogo } = require('./brandLogo');
 
 const mention = (avg) => (avg >= 16 ? 'Très bien' : avg >= 14 ? 'Bien' : avg >= 12 ? 'Assez bien' : avg >= 10 ? 'Passable' : 'Insuffisant');
 const periodKey = (f) => (f.from || f.to ? `${f.from || ''}_${f.to || ''}` : 'all');
@@ -80,7 +81,7 @@ async function loadReportCard(tenantId, id, f = {}) {
     if (mine) rank = 1 + avgs.filter((a) => a.avg > mine.avg).length;
   }
   const cm = await db.query('SELECT teacher_comment, council_decision, updated_at FROM report_card_comments WHERE tenant_id = $1 AND student_id = $2 AND period_key = $3', [tenantId, st.id, periodKey(f)]);
-  return { student: st, comment: cm.rows[0] || { teacher_comment: null, council_decision: null }, period: { from: f.from || null, to: f.to || null }, subjects: rowsOut, overall_average: overall, rank, class_size: classSize, mention: overall === null ? null : mention(onTwenty(overall)), grade_scale_max: scale };
+  return { logo: await loadTenantLogo(tenantId), student: st, comment: cm.rows[0] || { teacher_comment: null, council_decision: null }, period: { from: f.from || null, to: f.to || null }, subjects: rowsOut, overall_average: overall, rank, class_size: classSize, mention: overall === null ? null : mention(onTwenty(overall)), grade_scale_max: scale };
 }
 
 module.exports = { mention, periodKey, loadProfile, loadReportCard };

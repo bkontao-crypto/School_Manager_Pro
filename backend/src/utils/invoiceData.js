@@ -4,6 +4,7 @@
 const db = require('./db');
 const { Pdf, wrap, textWidth } = require('./pdf');
 const { C, MARGIN, band, pill, footer } = require('./pdfTheme');
+const { loadPlatformLogo } = require('./brandLogo');
 
 const INVOICE_SQL = `
   SELECT i.id, i.number, i.tenant_id, t.name AS tenant_name, t.code AS tenant_code, i.plan_id, p.name AS plan_name, i.description,
@@ -23,7 +24,7 @@ async function loadInvoice(id) {
   const iss = (await db.query('SELECT app_name, slogan FROM platform_identity')).rows[0] || {};
   const st = await db.query(`SELECT key, value FROM platform_settings WHERE key IN ('legal_details', 'payment_instructions')`);
   const m = Object.fromEntries(st.rows.map((x) => [x.key, x.value]));
-  return { ...inv, tenant: t.rows[0] || {}, issuer: { app_name: iss.app_name || 'SCHOOL MANAGER PRO', slogan: iss.slogan || null, legal_details: m.legal_details || '', payment_instructions: m.payment_instructions || '' } };
+  return { ...inv, logo: await loadPlatformLogo(), tenant: t.rows[0] || {}, issuer: { app_name: iss.app_name || 'SCHOOL MANAGER PRO', slogan: iss.slogan || null, legal_details: m.legal_details || '', payment_instructions: m.payment_instructions || '' } };
 }
 
 const money = (n) => `${new Intl.NumberFormat('fr-FR').format(Math.round(Number(n))).replace(/[  ]/g, ' ')} F CFA`;
@@ -34,7 +35,7 @@ function renderInvoicePdf(inv) {
   const pdf = new Pdf(); const L = MARGIN; const R = pdf.width - MARGIN; const CW = R - L;
   const credit = inv.document_type === 'credit_note'; const iss = inv.issuer; const t = inv.tenant || {};
   const docTitle = credit ? 'AVOIR' : 'FACTURE';
-  let y = band(pdf, { org: iss.app_name, subtitle: iss.slogan || 'Abonnement plateforme', title: docTitle, titleSub: inv.number }) - 28;
+  let y = band(pdf, { org: iss.app_name, subtitle: iss.slogan || 'Abonnement plateforme', title: docTitle, titleSub: inv.number, logo: inv.logo }) - 28;
 
   // Client et dates
   const half = (CW - 12) / 2; const ch = 104; const x2 = L + half + 12;

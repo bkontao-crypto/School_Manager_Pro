@@ -75,3 +75,36 @@ test('Reçu et facture : charte commune, pied de page numéroté, statut lisible
   assert.ok(!fc.includes('Thu ') && !/Generé le [A-Z][a-z]{2} /.test(fc), 'date du pied au format jj/mm/aaaa');
   assert.ok(contents(renderInvoicePdf({ ...inv, document_type: 'credit_note', credit_for_number: 'FAC-0' })).includes('Total de l'));
 });
+
+// ── Logos : décodage PNG/JPEG sans dépendance ──
+const { detectImage, decodePng, jpegInfo } = require('../../backend/src/utils/imageDecode');
+const pngFile = (w, h, ctype, depth, rows, extra = []) => {
+  const chunk = (type, data) => { const b = Buffer.alloc(12 + data.length); b.writeUInt32BE(data.length, 0); b.write(type, 4, 'latin1'); data.copy(b, 8); return b; };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = depth; ihdr[9] = ctype; ihdr[10] = 0; ihdr[11] = 0; ihdr[12] = 0;
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), ...extra.map(([t, d]) => chunk(t, d)), chunk('IDAT', zlib.deflateSync(Buffer.from(rows))), chunk('IEND', Buffer.alloc(0))]);
+};
+
+test('Logo PNG : RGB, filtre « Sub » sur RGBA avec transparence, palette 1 bit avec tRNS', () => {
+  const rgb = decodePng(pngFile(2, 1, 2, 8, [0, 1, 2, 3, 4, 5, 6]));
+  assert.deepEqual([...rgb.rgb], [1, 2, 3, 4, 5, 6]); assert.equal(rgb.alpha, null);
+  const sub = decodePng(pngFile(2, 1, 6, 8, [1, 10, 20, 30, 40, 40, 40, 40, 40]));
+  assert.deepEqual([...sub.rgb], [10, 20, 30, 50, 60, 70]); assert.deepEqual([...sub.alpha], [40, 80]);
+  const pal = decodePng(pngFile(3, 1, 3, 1, [0, 0x40], [['PLTE', Buffer.from([255, 0, 0, 0, 0, 255])], ['tRNS', Buffer.from([0])]]));
+  assert.deepEqual([...pal.rgb], [255, 0, 0, 0, 0, 255, 255, 0, 0]);
+  assert.deepEqual([...pal.alpha], [0, 255, 0]);
+});
+
+test('Logo : JPEG lu sans décodage, WebP refusé, signature binaire seule', () => {
+  const jpg = Buffer.alloc(40); jpg[0] = 0xff; jpg[1] = 0xd8; jpg[2] = 0xff; jpg[3] = 0xc0; jpg.writeUInt16BE(0x11, 4); jpg[6] = 8; jpg.writeUInt16BE(64, 7); jpg.writeUInt16BE(48, 9); jpg[11] = 3;
+  assert.deepEqual(jpegInfo(jpg), { height: 64, width: 48, components: 3 });
+  const img = detectImage(jpg); assert.equal(img.kind, 'jpeg'); assert.equal(img.cs, 'DeviceRGB');
+  assert.equal(detectImage(Buffer.from('RIFF0000WEBPVP8 ', 'latin1')), null);
+  assert.equal(detectImage(Buffer.from('pas une image du tout')), null);
+});
+
+test('Image dans le PDF : objet XObject et opérateur Do', () => {
+  const pdf = new Pdf(); pdf.image(10, 10, 50, 50, detectImage(pngFile(2, 1, 2, 8, [0, 1, 2, 3, 4, 5, 6])));
+  const buf = pdf.toBuffer(); const txt = buf.toString('latin1');
+  assert.ok(txt.includes('/Subtype /Image') && txt.includes('/Width 2') && txt.includes('/XObject'));
+  assert.ok(contents(buf).includes('/Im1 Do'));
+});

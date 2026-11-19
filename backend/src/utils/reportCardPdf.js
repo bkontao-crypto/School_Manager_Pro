@@ -3,6 +3,7 @@
 // tableau à lignes alternées (en-tête répété), appréciation, signatures, pied de page numéroté sur chaque page.
 
 const { Pdf, wrap, textWidth } = require('./pdf');
+const { drawLogo } = require('./pdfTheme');
 
 const C = {
   brand: '#1E3A8A', brandDark: '#172554', accent: '#F59E0B', ink: '#1E293B', text: '#334155', muted: '#64748B',
@@ -36,8 +37,9 @@ function renderReportCard(data, schoolName) {
     pdf.rect(0, H - bh, W, bh, { fill: C.brand });
     pdf.rect(0, H - bh - 4, W, 4, { fill: C.accent });
     if (first) {
-      pdf.text(L, H - 40, org, { size: 18, bold: true, color: C.white });
-      pdf.text(L, H - 61, 'BULLETIN DE NOTES', { size: 10, bold: true, color: C.headLight });
+      const dx = drawLogo(pdf, data.logo, L, H - 18, 54);
+      pdf.text(L + dx, H - 40, org, { size: 18, bold: true, color: C.white });
+      pdf.text(L + dx, H - 61, 'BULLETIN DE NOTES', { size: 10, bold: true, color: C.headLight });
       if (s.school_year) pdf.text(R, H - 40, `Année scolaire ${s.school_year}`, { size: 10, color: C.white, align: 'right' });
       pdf.text(R, H - 61, periodTxt, { size: 9, color: C.headLight, align: 'right' });
     } else {
