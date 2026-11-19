@@ -1,6 +1,7 @@
 // Module Élèves : liste paginée avec recherche, création, dossier individuel, modification, suppression logique.
 
 const express = require('express');
+const { lockQuota } = require('../middleware/quota');
 const db = require('../utils/db');
 const { validate, isUuid } = require('../utils/validate');
 const { wrap, invalid, pageParams, HttpError } = require('../utils/http');
@@ -85,12 +86,15 @@ router.post('/', requireWrite('students'), wrap(async (req, res) => {
   const { values, errors } = validate(req.body, SPEC);
   if (errors.length) return invalid(res, errors);
   const cols = Object.keys(values);
-  const result = await db.query(
-    `INSERT INTO students (tenant_id${cols.map((c) => `, ${c}`).join('')})
-     VALUES ($1${cols.map((_, i) => `, $${i + 2}`).join('')})
-     RETURNING id, matricule, first_name, last_name, status, class_id`,
-    [req.tenantId, ...cols.map((c) => values[c])]
-  );
+  const result = await db.withTransaction(async (client) => {
+    await lockQuota(client, req.tenantId, 'students');
+    return client.query(
+      `INSERT INTO students (tenant_id${cols.map((c) => `, ${c}`).join('')})
+       VALUES ($1${cols.map((_, i) => `, $${i + 2}`).join('')})
+       RETURNING id, matricule, first_name, last_name, status, class_id`,
+      [req.tenantId, ...cols.map((c) => values[c])]
+    );
+  });
   await audit(req, { action: 'student.create', entity: 'student', entityId: result.rows[0].id, details: { matricule: values.matricule } });
   res.status(201).json({ data: result.rows[0] });
 }));

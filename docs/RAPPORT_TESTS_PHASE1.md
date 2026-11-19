@@ -158,7 +158,11 @@ Règle retenue le 19/11/2026 :
 - Tests : unitaires 32/32 ; intégration 109/109, dont le superadmin qui édite l’identité d’un établissement et la refus de la même écriture à son administrateur, et le refus sur l’identité du site.
 - Non vérifié : parcours navigateur de la fiche établissement.
 
-**Points ouverts** (non traités dans cette livraison) :
-- Le quota est vérifié avant l’insertion sans verrou : deux créations simultanées peuvent dépasser la limite d’une unité.
-- La réactivation d’un compte désactivé ne passe pas par le contrôle de quota.
-- Les « contacts » (responsables d’élèves) ne sont pas soumis à un quota : le contrat ne le prévoit pas. À confirmer.
+**Points ouverts** : les deux points relevés sont traités en 7.10. Reste ouvert : le quota des « contacts » (responsables d’élèves), qui n’existe pas dans le modèle de contrat — à confirmer.
+
+### 7.10 Quotas : verrou transactionnel et réactivation contrôlée — Réalisé et vérifié
+- Le contrôle du quota est refait à l’intérieur de la transaction qui crée ou réactive le compte (`lockQuota`, `backend/src/middleware/quota.js`), sous verrou consultatif transactionnel par établissement et par type (`pg_advisory_xact_lock`). Le contrôle rapide du middleware reste en amont.
+- Appliqué à : création d’élève (`POST /api/students`), création d’utilisateur (`POST /api/users`, sauf compte parent), réactivation d’un compte inactif (`PUT /api/users/:id` avec `is_active: true`).
+- Réponse à la limite : 403 avec `code: "quota_exceeded"`.
+- Tests : intégration 110/110, dont une réactivation refusée à la limite (compte resté inactif) et six créations simultanées avec deux places libres (exactement deux créées, quatre refusées). Unitaires 32/32.
+- Non vérifié : que ce test échoue sur l’ancien code (non relancé sur la version antérieure).
