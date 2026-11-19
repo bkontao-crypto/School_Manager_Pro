@@ -11,7 +11,7 @@ const { validate, isUuid } = require('../utils/validate');
 const { HttpError, wrap, invalid, pageParams } = require('../utils/http');
 const { requireRole } = require('../middleware/auth');
 const { audit } = require('../utils/audit');
-const { BANNER_REQUIREMENTS, checkBanner } = require('../utils/image');
+const { BANNER_REQUIREMENTS } = require('../utils/image');
 const { licenseState } = require('../utils/license');
 
 const settings = express.Router();
@@ -49,10 +49,7 @@ settings.put('/', requireRole('admin'), wrap(async (req, res) => {
 // Sans ligne dans tenant_banners, le client affiche l'affiche par défaut livrée avec l'application.
 //  GET    /api/settings/banner         : métadonnées + exigences (tous les rôles)
 //  GET    /api/settings/banner/image   : image personnalisée (404 si aucune)
-//  PUT    /api/settings/banner/image   : envoi brut (Content-Type image/png|jpeg|webp), admin
-//  PUT    /api/settings/banner/text    : titre / sous-titre, admin
-//  DELETE /api/settings/banner         : retour à l'affiche par défaut, admin
-const rawImage = express.raw({ type: ['image/png', 'image/jpeg', 'image/webp'], limit: BANNER_REQUIREMENTS.maxBytes + 1024 });
+//  PUT / DELETE                        : refusés (403) : écriture réservée au superadmin (platformBanner.js)
 
 settings.get('/banner', wrap(async (req, res) => {
   const r = await db.query(
@@ -71,42 +68,11 @@ settings.get('/banner/image', wrap(async (req, res) => {
   res.end(r.rows[0].image);
 }));
 
-settings.put('/banner/image', requireRole('admin'), rawImage, wrap(async (req, res) => {
-  const { info, errors } = checkBanner(req.body);
-  if (errors.length) return invalid(res, errors);
-  await db.query(
-    `INSERT INTO tenant_banners (tenant_id, image, mime, width, height, updated_by, updated_at)
-          VALUES ($1, $2, $3, $4, $5, $6, now())
-     ON CONFLICT (tenant_id) DO UPDATE
-        SET image = EXCLUDED.image, mime = EXCLUDED.mime, width = EXCLUDED.width, height = EXCLUDED.height,
-            updated_by = EXCLUDED.updated_by, updated_at = now()`,
-    [req.tenantId, req.body, info.mime, info.width, info.height, req.user.id]);
-  await audit(req, { action: 'banner.update', entity: 'tenant', entityId: req.tenantId });
-  res.json({ data: { custom: true, mime: info.mime, width: info.width, height: info.height, bytes: info.bytes } });
-}));
-
-settings.put('/banner/text', requireRole('admin'), wrap(async (req, res) => {
-  const { values, errors } = validate(req.body, {
-    title: { type: 'string', max: 120 },
-    subtitle: { type: 'string', max: 240 }
-  });
-  if (errors.length) return invalid(res, errors);
-  const title = values.title || null;
-  const subtitle = values.subtitle || null;
-  await db.query(
-    `INSERT INTO tenant_banners (tenant_id, title, subtitle, updated_by, updated_at) VALUES ($1, $2, $3, $4, now())
-     ON CONFLICT (tenant_id) DO UPDATE SET title = EXCLUDED.title, subtitle = EXCLUDED.subtitle,
-            updated_by = EXCLUDED.updated_by, updated_at = now()`,
-    [req.tenantId, title, subtitle, req.user.id]);
-  await audit(req, { action: 'banner.text', entity: 'tenant', entityId: req.tenantId });
-  res.json({ data: { title, subtitle } });
-}));
-
-settings.delete('/banner', requireRole('admin'), wrap(async (req, res) => {
-  await db.query('DELETE FROM tenant_banners WHERE tenant_id = $1', [req.tenantId]);
-  await audit(req, { action: 'banner.reset', entity: 'tenant', entityId: req.tenantId });
-  res.json({ data: { custom: false } });
-}));
+// Écriture de l'affiche : réservée au superadmin (routes /api/platform/tenants/:tenantId/banner).
+const { denyTenantWrite } = require('./identity');
+settings.put('/banner/image', denyTenantWrite);
+settings.put('/banner/text', denyTenantWrite);
+settings.delete('/banner', denyTenantWrite);
 
 // Mon abonnement : pack, licence, quotas et factures de l'établissement (lecture seule, administrateur).
 settings.get('/subscription', requireRole('admin'), wrap(async (req, res) => {

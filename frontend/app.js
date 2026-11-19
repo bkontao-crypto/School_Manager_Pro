@@ -384,22 +384,30 @@ function bannerSectionHtml() {
   </section>`;
 }
 
-async function setupBannerSection() {
+// Affiche d'un établissement, éditée par le superadmin. base = /api/platform/tenants/:id/banner
+async function setupBannerSection(base) {
   const prev = $('banner-prev-img');
-  let meta = (await get('/api/settings/banner')).data;
+  let meta = (await get(base)).data;
   const req = meta.requirements;
-  let pending = null;
+  let pending = null; let previewUrl = null;
   const showErrors = (list) => { const box = $('banner-errors'); box.classList.toggle('hidden', !list.length); box.innerHTML = list.length ? `<strong>Image refusée :</strong><ul class="list-disc pl-5 mt-1">${list.map((e) => `<li>${escapeHtml(e)}</li>`).join('')}</ul>` : ''; };
   $('banner-reqs').innerHTML = [
     `Format : ${req.ratio}:1 (ex. 1600×400 px)`, `Tolérance : ±${Math.round(req.ratioTolerance * 100)} % sur les proportions`,
     `Taille minimale : ${req.minWidth}×${req.minHeight} px`, `Taille maximale : ${req.maxWidth}×${req.maxHeight} px`,
     'Types : PNG, JPEG ou WebP', `Poids maximal : ${req.maxBytes / 1048576} Mo`].map((t) => `<li>${t}</li>`).join('');
-  const refresh = () => {
-    prev.src = meta.custom ? $('hero-banner-img').src : HERO_DEFAULT.src;
+  const paintPreview = async () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = null;
+    if (meta.custom) { const res = await fetch(`${base}/image`, { headers: authHeaders() }); if (res.ok) previewUrl = URL.createObjectURL(await res.blob()); }
+    prev.src = previewUrl || HERO_DEFAULT.src;
+  };
+  const refresh = async () => {
+    await paintPreview();
     $('banner-title').value = meta.title || ''; $('banner-subtitle').value = meta.subtitle || '';
     $('banner-reset').classList.toggle('hidden', !meta.custom && !meta.title && !meta.subtitle);
   };
-  await loadBanner(); refresh();
+  const reload = async () => { meta = (await get(base)).data; await refresh(); };
+  await refresh();
   $('banner-pick').addEventListener('click', () => $('banner-file').click());
   $('banner-file').addEventListener('change', async () => {
     const file = $('banner-file').files[0];
@@ -415,19 +423,19 @@ async function setupBannerSection() {
     if (!pending) return;
     $('banner-send').disabled = true;
     try {
-      const res = await fetch('/api/settings/banner/image', { method: 'PUT', headers: { ...authHeaders(), 'Content-Type': pending.type }, body: pending });
+      const res = await fetch(`${base}/image`, { method: 'PUT', headers: { ...authHeaders(), 'Content-Type': pending.type }, body: pending });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { showErrors(Array.isArray(data.errors) && data.errors.length ? data.errors : [data.error || `Erreur HTTP ${res.status}`]); return; }
       pending = null; $('banner-file').value = ''; $('banner-send').classList.add('hidden');
-      meta = await loadBanner() || meta; refresh(); toast('Affiche d’accueil publiée.');
+      await reload(); toast('Affiche d’accueil publiée.');
     } catch (e) { showErrors(['Serveur injoignable. Vérifiez votre connexion.']); } finally { $('banner-send').disabled = false; }
   });
   $('banner-text-save').addEventListener('click', async () => {
-    try { await api('PUT', '/api/settings/banner/text', { title: $('banner-title').value.trim(), subtitle: $('banner-subtitle').value.trim() }); meta = await loadBanner() || meta; refresh(); toast('Textes enregistrés.'); } catch (e) { toast(e.message, 'err'); }
+    try { await api('PUT', `${base}/text`, { title: $('banner-title').value.trim(), subtitle: $('banner-subtitle').value.trim() }); await reload(); toast('Textes enregistrés.'); } catch (e) { toast(e.message, 'err'); }
   });
   $('banner-reset').addEventListener('click', async () => {
     if (!(await confirmDialog('Affiche par défaut', 'L’affiche personnalisée et les textes seront supprimés.'))) return;
-    try { await api('DELETE', '/api/settings/banner'); meta = await loadBanner() || meta; refresh(); showErrors([]); toast('Affiche par défaut rétablie.'); } catch (e) { toast(e.message, 'err'); }
+    try { await api('DELETE', base); await reload(); showErrors([]); toast('Affiche par défaut rétablie.'); } catch (e) { toast(e.message, 'err'); }
   });
 }
 
@@ -875,7 +883,7 @@ async function openSettings() {
       <p class="mt-2 text-sm">Nom : <strong id="tenant-name">${escapeHtml(tenant.name)}</strong> ${isAdmin ? '<button id="tenant-edit" class="ml-2 text-blue-600 hover:underline text-sm">Modifier</button>' : ''}</p></section>
     <section class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-3">Mon compte</h3><p class="text-sm text-slate-500">${escapeHtml(session.user.email)} · ${escapeHtml(ROLE_LABELS[session.user.role] || session.user.role)}</p><button id="pwd-btn" class="mt-3 px-4 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700">Changer mon mot de passe</button></section>
     ${isAdmin ? gradingSectionHtml() : ''}
-    ${isAdmin ? bannerSectionHtml() + identitySectionHtml(false) + subscriptionSectionHtml() + permissionsSectionHtml() : ''}
+    ${isAdmin ? '<p class="text-xs text-slate-400">L’identité visible de l’application (nom, slogan, logo, affiche) est gérée par la plateforme. Vos comptes et sous-comptes restent gérés dans la section Utilisateurs.</p>' + subscriptionSectionHtml() + permissionsSectionHtml() : ''}
     ${canReopen ? `<section class="bg-white rounded-2xl border border-slate-200 p-5"><div class="flex items-center justify-between mb-3"><h3 class="font-bold">Périodes scolaires (trimestres)</h3>${isAdmin ? `<button id="period-add" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-2"></i>Ajouter</button>` : ''}</div><div id="periods-list" class="text-sm space-y-2"></div><p class="mt-3 text-xs text-slate-400">Les périodes servent à filtrer les bulletins.</p></section>
     ${isAdmin ? `<section id="corrections-card" class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-3">Corrections de notes en attente</h3><div id="corrections-list" class="text-sm"></div></section>` : ''}
     <section class="bg-white rounded-2xl border border-slate-200 p-5"><div class="flex items-center justify-between mb-3"><h3 class="font-bold">Utilisateurs</h3><button id="user-add" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-2"></i>Ajouter</button></div>
@@ -887,8 +895,6 @@ async function openSettings() {
   });
   if (!canReopen) return;
   if (isAdmin) {
-  setupBannerSection().catch((e) => toast(e.message, 'err'));
-  setupIdentitySection('/api/settings/identity').catch((e) => toast(e.message, 'err'));
   setupSubscription().catch((e) => toast(e.message, 'err'));
   setupPermissions().catch((e) => toast(e.message, 'err'));
   $('tenant-edit').addEventListener('click', async () => {
@@ -1468,11 +1474,15 @@ async function platformTenantDetail(id) {
       ${t.admins.length ? t.admins.map((a) => `<tr class="border-b border-slate-100"><td class="py-2 pr-3">${escapeHtml(a.full_name || '—')}</td><td class="py-2 pr-3">${escapeHtml(a.email)}</td><td class="py-2 pr-3 text-slate-500">${a.last_login_at ? new Date(a.last_login_at).toLocaleString('fr-FR') : 'jamais'}</td><td class="py-2 pr-3">${a.is_active ? 'Actif' : '<span class="text-red-600">Désactivé</span>'}</td>
         <td class="py-2 text-right whitespace-nowrap"><button data-pwd="${escapeHtml(a.id)}" data-who="${escapeHtml(a.email)}" class="${BTN_LIGHT}">Mot de passe</button> <button data-toggle="${escapeHtml(a.id)}" data-active="${a.is_active ? '1' : '0'}" class="${BTN_LIGHT}">${a.is_active ? 'Désactiver' : 'Réactiver'}</button></td></tr>`).join('') : '<tr><td colspan="5" class="py-3 text-slate-400">Aucun administrateur.</td></tr>'}</tbody></table></div>
       <p class="mt-3 text-xs text-slate-400">Le superadmin ne crée pas les employés : l’administrateur de l’établissement gère ses propres utilisateurs.</p></section>
+    <section class="${CARD}"><h3 class="font-bold mb-1">Apparence de l’établissement</h3><p class="text-xs text-slate-400 mb-3">Modifiable par le superadmin uniquement. L’établissement ne peut pas changer son identité ni son affiche.</p>${identitySectionHtml(false)}${bannerSectionHtml()}</section>
     <section class="${CARD}"><div class="flex justify-between items-center mb-3"><h3 class="font-bold">Factures d’abonnement</h3><button id="pl-invoice" class="${BTN_LIGHT}">Nouvelle facture</button></div>
       ${invs.length ? `<div class="overflow-x-auto"><table class="w-full text-sm text-left"><tbody>${invs.map((i) => `<tr class="border-b border-slate-100"><td class="py-2 pr-3 font-semibold">${escapeHtml(i.number)}</td><td class="py-2 pr-3 whitespace-nowrap">${displayDate(i.period_start)} → ${displayDate(i.period_end)}</td><td class="py-2 pr-3 whitespace-nowrap">${money(i.amount)}</td><td class="py-2 pr-3">${invoiceBadge(i)}</td><td class="py-2 text-right"><button data-inv="${escapeHtml(i.id)}" class="${BTN_LIGHT}">Voir</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="text-sm text-slate-400">Aucune facture.</p>'}</section>
     <section class="${CARD}"><h3 class="font-bold mb-1">${suspended ? 'Réactiver l’établissement' : 'Suspendre l’établissement'}</h3>
       <p class="text-sm text-slate-500 mb-3">${suspended ? 'Les utilisateurs pourront de nouveau se connecter.' : 'Révocation sans suppression : l’accès est coupé immédiatement, toutes les données sont conservées.'}</p>
       <button id="pl-suspend" class="${BTN} ${suspended ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'} text-white">${suspended ? 'Réactiver' : 'Suspendre'}</button></section>`;
+  const tid = encodeURIComponent(id);
+  setupIdentitySection(`/api/platform/tenants/${tid}/identity`).catch((e) => toast(e.message, 'err'));
+  setupBannerSection(`/api/platform/tenants/${tid}/banner`).catch((e) => toast(e.message, 'err'));
   const reload = () => openPlatform('platform-tenants', { tenantId: id });
   $('pl-back').addEventListener('click', () => openPlatform('platform-tenants'));
   $('pl-edit').addEventListener('click', async () => {
@@ -1614,7 +1624,7 @@ async function loadIdentity() {
 function identitySectionHtml(platform) {
   return `<section id="idn-section" class="${CARD}">
     <h3 class="font-bold mb-1">Identité de l’application</h3>
-    <p class="text-sm text-slate-500 mb-3">${platform ? 'Nom, slogan et logo par défaut : affichés sur la page de connexion et dans les établissements qui n’ont pas leur propre identité.' : 'Nom, slogan et logo affichés dans le menu, sur la page de connexion et sur le tableau de bord de votre établissement.'}</p>
+    <p class="text-sm text-slate-500 mb-3">${platform ? 'Nom, slogan et logo par défaut : affichés sur la page de connexion et dans les établissements qui n’ont pas leur propre identité.' : 'Nom, slogan et logo affichés dans le menu, sur la page de connexion et sur le tableau de bord de cet établissement. Réservé au superadmin.'}</p>
     <div class="grid lg:grid-cols-2 gap-4">
       <div class="rounded-xl bg-[#0b172a] p-4 flex items-center gap-3 min-h-[88px]" aria-label="Aperçu">
         <div class="w-14 h-14 shrink-0 rounded-xl bg-gradient-to-tr from-amber-400 to-amber-300 flex items-center justify-center text-[#0b172a] text-2xl overflow-hidden"><i id="idn-prev-icon" class="fa-solid fa-graduation-cap"></i><img id="idn-prev-logo" alt="" class="hidden w-full h-full object-contain bg-white"></div>
@@ -1652,9 +1662,14 @@ async function setupIdentitySection(base) {
     $('idn-prev-logo').classList.toggle('hidden', !logo); $('idn-prev-icon').style.display = logo ? 'none' : '';
     if (logo) $('idn-prev-logo').src = logo; else $('idn-prev-logo').removeAttribute('src');
   };
+  let previewUrl = null;
   const refresh = async () => {
-    d = (await get(base)).data; await loadIdentity();
-    render(d.effective, d.effective.has_logo ? brandBlobUrl : null);
+    d = (await get(base)).data;
+    if (base === '/api/platform/identity') await loadIdentity();
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = null;
+    if (d.effective.has_logo) { const res = await fetch(`${base}/logo`, { headers: authHeaders() }); if (res.ok) previewUrl = URL.createObjectURL(await res.blob()); }
+    render(d.effective, previewUrl);
     $('idn-name').value = d.custom.app_name || ''; $('idn-slogan').value = d.custom.slogan || '';
     $('idn-rm-logo').classList.toggle('hidden', !d.custom.has_logo);
     $('idn-reset').classList.toggle('hidden', !(d.custom.app_name || d.custom.slogan || d.custom.has_logo));

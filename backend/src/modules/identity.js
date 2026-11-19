@@ -4,7 +4,7 @@
 // Le logo est une image carrée (PNG/JPEG/WebP) contrôlée sur sa signature binaire, jamais sur son extension.
 const express = require('express');
 const db = require('../utils/db');
-const { validate } = require('../utils/validate');
+const { validate, isUuid } = require('../utils/validate');
 const { HttpError, wrap, invalid } = require('../utils/http');
 const { audit } = require('../utils/audit');
 const { requireRole } = require('../middleware/auth');
@@ -88,9 +88,12 @@ const platformEdit = editRouter({
 });
 
 // Identité d'un établissement : lecture pour tous ses utilisateurs, écriture pour l'administrateur.
-const tenantEdit = editRouter({
-  table: 'tenant_identity', keyCol: 'tenant_id', key: (req) => req.tenantId, entityId: (req) => req.tenantId, prefix: 'identity',
-  guard: requireRole('admin'),
+// Écriture refusée à l'établissement : l'identité visible de l'application (nom, slogan, logo, affiche) est gérée
+// par le superadmin uniquement. Les comptes et sous-comptes de l'établissement restent de son ressort.
+const denyTenantWrite = (req, res) => res.status(403).json({ error: 'Réservé au superadmin : l’identité de l’application est gérée par la plateforme.' });
+
+const tenantCfgBase = {
+  table: 'tenant_identity', keyCol: 'tenant_id', prefix: 'identity',
   async effective(req, mine) {
     const plat = await readOwn('platform_identity', 'singleton', true);
     const name = (mine && mine.app_name) || (plat && plat.app_name) || DEFAULTS.app_name;
@@ -101,7 +104,10 @@ const tenantEdit = editRouter({
       source: mine && (mine.app_name || mine.slogan || mine.has_logo) ? 'tenant' : (plat && (plat.app_name || plat.slogan || plat.has_logo) ? 'platform' : 'default') };
   },
   fallbackLogo: () => readLogo('platform_identity', 'singleton', true)
-});
+};
+
+// Lecture pour les utilisateurs de l'établissement ; écriture refusée (403).
+const tenantEdit = editRouter({ ...tenantCfgBase, key: (req) => req.tenantId, entityId: (req) => req.tenantId, guard: denyTenantWrite });
 
 // Public (page de connexion) : identité de la plateforme uniquement, aucune donnée d'établissement.
 const publicRouter = express.Router();
@@ -115,4 +121,20 @@ publicRouter.get('/logo', wrap(async (req, res) => {
   sendLogo(res, row);
 }));
 
-module.exports = { platformEdit, tenantEdit, publicRouter, DEFAULTS };
+// Établissement ciblé par le superadmin (/api/platform/tenants/:tenantId/…) : existence vérifiée avant toute écriture.
+const targetTenant = wrap(async (req, res, next) => {
+  if (!isUuid(req.params.tenantId)) throw new HttpError(400, 'Identifiant d’établissement invalide.');
+  const t = await db.query('SELECT 1 FROM tenants WHERE id = $1', [req.params.tenantId]);
+  if (!t.rows.length) throw new HttpError(404, 'Établissement introuvable.');
+  req.targetTenantId = req.params.tenantId;
+  next();
+});
+
+// Identité d'un établissement, éditée par le superadmin (/api/platform/tenants/:tenantId/identity).
+const platformTenantIdentity = express.Router();
+platformTenantIdentity.use('/tenants/:tenantId/identity', targetTenant, editRouter({
+  ...tenantCfgBase, key: (req) => req.targetTenantId, entityId: (req) => req.targetTenantId,
+  prefix: 'platform.tenant_identity', guard: (req, res, next) => next()
+}));
+
+module.exports = { platformEdit, tenantEdit, publicRouter, DEFAULTS, platformTenantIdentity, targetTenant, denyTenantWrite };

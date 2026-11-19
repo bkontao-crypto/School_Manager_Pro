@@ -728,7 +728,8 @@ if (!TEST_URL) {
           b.writeUInt32BE(13, 8); b.write('IHDR', 12, 'ascii'); b.writeUInt32BE(w, 16); b.writeUInt32BE(h, 20);
           return b;
         };
-        const put = (token, buf, type = 'image/png') => api('PUT', '/api/settings/banner/image', { token, raw: buf, headers: { 'Content-Type': type } });
+        const PL = `/api/platform/tenants/${TA}/banner`;
+        const put = (token, buf, type = 'image/png') => api('PUT', `${PL}/image`, { token, raw: buf, headers: { 'Content-Type': type } });
 
         const none = await api('GET', '/api/settings/banner', { token: tokens.userA });
         assert.equal(none.status, 200);
@@ -736,25 +737,31 @@ if (!TEST_URL) {
         assert.equal(none.json.data.requirements.ratio, 4);
         assert.equal((await api('GET', '/api/settings/banner/image', { token: tokens.userA })).status, 404);
 
+        // écriture réservée au superadmin : refus pour l'établissement (administrateur, enseignant, utilisateur)
         assert.equal((await put(tokens.userA, mk(1600, 400))).status, 403);
+        assert.equal((await put(tokens.adminA, mk(1600, 400))).status, 403);
         assert.equal((await put(tokens.teacherA, mk(1600, 400))).status, 403);
         assert.equal((await put(null, mk(1600, 400))).status, 401);
+        // la route de l'établissement n'accepte plus aucune écriture, même pour son administrateur
+        assert.equal((await api('PUT', '/api/settings/banner/image', { token: tokens.adminA, raw: mk(1600, 400), headers: { 'Content-Type': 'image/png' } })).status, 403);
 
-        const bad = await put(tokens.adminA, mk(1600, 800));
+        // validations (superadmin)
+        const bad = await put(tokens.root, mk(1600, 800));
         assert.equal(bad.status, 400);
         assert.match(JSON.stringify(bad.json.errors), /Proportions/);
-        assert.equal((await put(tokens.adminA, mk(800, 200))).status, 400);
-        assert.equal((await put(tokens.adminA, Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'))).status, 400);
-        assert.equal((await put(tokens.adminA, Buffer.alloc(3 * 1024 * 1024))).status, 413);
+        assert.equal((await put(tokens.root, mk(800, 200))).status, 400);
+        assert.equal((await put(tokens.root, Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'))).status, 400);
+        assert.equal((await put(tokens.root, Buffer.alloc(3 * 1024 * 1024))).status, 413);
         assert.equal((await api('GET', '/api/settings/banner', { token: tokens.adminA })).json.data.custom, false);
 
         const good = mk(1600, 400);
-        const ok = await put(tokens.adminA, good);
+        const ok = await put(tokens.root, good);
         assert.equal(ok.status, 200);
         assert.equal(ok.json.data.width, 1600);
         const meta = (await api('GET', '/api/settings/banner', { token: tokens.userA })).json.data;
         assert.equal(meta.custom, true);
         assert.equal(meta.height, 400);
+        assert.equal((await api('GET', PL, { token: tokens.root })).json.data.custom, true);
         const img = await fetch(`${base}/api/settings/banner/image`, { headers: { Authorization: `Bearer ${tokens.userA}` } });
         assert.equal(img.status, 200);
         assert.equal(img.headers.get('content-type'), 'image/png');
@@ -764,17 +771,18 @@ if (!TEST_URL) {
         assert.equal((await api('GET', '/api/settings/banner', { token: tokens.adminB })).json.data.custom, false);
         assert.equal((await api('GET', '/api/settings/banner/image', { token: tokens.adminB })).status, 404);
 
-        // textes : conservés avec l'image, validés, effaçables
-        assert.equal((await api('PUT', '/api/settings/banner/text', { token: tokens.userA, body: { title: 'x' } })).status, 403);
-        assert.equal((await api('PUT', '/api/settings/banner/text', { token: tokens.adminA, body: { title: 'T'.repeat(121) } })).status, 400);
-        assert.equal((await api('PUT', '/api/settings/banner/text', { token: tokens.adminA, body: { title: 'École Les Étoiles', subtitle: 'Année 2026-2027' } })).status, 200);
+        // textes : conservés avec l'image, validés, effaçables (superadmin)
+        assert.equal((await api('PUT', `${PL}/text`, { token: tokens.adminA, body: { title: 'x' } })).status, 403);
+        assert.equal((await api('PUT', `${PL}/text`, { token: tokens.root, body: { title: 'T'.repeat(121) } })).status, 400);
+        assert.equal((await api('PUT', `${PL}/text`, { token: tokens.root, body: { title: 'École Les Étoiles', subtitle: 'Année 2026-2027' } })).status, 200);
         const withText = (await api('GET', '/api/settings/banner', { token: tokens.userA })).json.data;
         assert.equal(withText.title, 'École Les Étoiles');
         assert.equal(withText.custom, true);
 
-        // retour à l'affiche par défaut
-        assert.equal((await api('DELETE', '/api/settings/banner', { token: tokens.userA })).status, 403);
-        assert.equal((await api('DELETE', '/api/settings/banner', { token: tokens.adminA })).status, 200);
+        // retour à l'affiche par défaut (superadmin uniquement)
+        assert.equal((await api('DELETE', PL, { token: tokens.adminA })).status, 403);
+        assert.equal((await api('DELETE', '/api/settings/banner', { token: tokens.adminA })).status, 403);
+        assert.equal((await api('DELETE', PL, { token: tokens.root })).status, 200);
         const reset = (await api('GET', '/api/settings/banner', { token: tokens.adminA })).json.data;
         assert.equal(reset.custom, false);
         assert.equal(reset.title, null);
@@ -1044,12 +1052,22 @@ if (!TEST_URL) {
         assert.equal(eff.effective.source, 'platform');
         assert.equal(eff.effective.logo_source, 'platform');
         assert.equal((await bin('/api/settings/identity/logo', tokens.adminA)).status, 200); // logo hérité
+        // l'établissement ne modifie plus son identité (texte, logo, réinitialisation) : 403, même pour son administrateur
         assert.equal((await api('PUT', '/api/settings/identity/text', { token: tokens.userA, body: { app_name: 'Hack' } })).status, 403);
-        assert.equal((await api('PUT', '/api/settings/identity/text', { token: tokens.adminA, body: { app_name: 'École Les Étoiles', slogan: 'Réussir ensemble' } })).status, 200);
+        assert.equal((await api('PUT', '/api/settings/identity/text', { token: tokens.adminA, body: { app_name: 'Hack' } })).status, 403);
+        assert.equal((await putLogo('/api/settings/identity/logo', tokens.adminA, png(512, 512))).status, 403);
+        assert.equal((await api('DELETE', '/api/settings/identity/logo', { token: tokens.adminA })).status, 403);
+        assert.equal((await api('DELETE', '/api/settings/identity', { token: tokens.adminA })).status, 403);
+        // superadmin : identité de l'établissement A (route plateforme)
+        const PT = `/api/platform/tenants/${TA}/identity`;
+        assert.equal((await api('PUT', `${PT}/text`, { token: tokens.adminA, body: { app_name: 'X' } })).status, 403);
+        assert.equal((await api('PUT', `${PT}/text`, { token: tokens.root, body: { app_name: 'N'.repeat(61) } })).status, 400);
+        assert.equal((await api('PUT', `${PT}/text`, { token: tokens.root, body: { app_name: 'École Les Étoiles', slogan: 'Réussir ensemble' } })).status, 200);
+        assert.equal((await api('GET', PT, { token: tokens.root })).json.data.custom.app_name, 'École Les Étoiles');
         const own = png(512, 512);
-        assert.equal((await putLogo('/api/settings/identity/logo', tokens.adminA, png(300, 200))).status, 400);
-        assert.equal((await putLogo('/api/settings/identity/logo', tokens.teacherA, own)).status, 403);
-        assert.equal((await putLogo('/api/settings/identity/logo', tokens.adminA, own)).status, 200);
+        assert.equal((await putLogo(`${PT}/logo`, tokens.root, png(300, 200))).status, 400);
+        assert.equal((await putLogo(`${PT}/logo`, tokens.adminA, own)).status, 403);
+        assert.equal((await putLogo(`${PT}/logo`, tokens.root, own)).status, 200);
         const a = (await api('GET', '/api/settings/identity', { token: tokens.userA })).json.data.effective; // lecture : tous les rôles
         assert.equal(a.app_name, 'École Les Étoiles');
         assert.equal(a.logo_source, 'tenant');
@@ -1059,11 +1077,13 @@ if (!TEST_URL) {
         assert.equal(b.app_name, 'EduMali');
         assert.equal(b.source, 'platform');
         assert.equal((await api('GET', '/api/settings/identity', { token: tokens.root })).status, 403);
-        // retrait du logo de l'école -> retour au logo de la plateforme ; réinitialisation complète
-        assert.equal((await api('DELETE', '/api/settings/identity/logo', { token: tokens.adminA })).status, 200);
+        // routes plateforme : établissement inconnu, identifiant invalide
+        assert.equal((await api('GET', '/api/platform/tenants/cccccccc-cccc-4ccc-8ccc-cccccccccccc/identity', { token: tokens.root })).status, 404);
+        assert.equal((await api('GET', '/api/platform/tenants/pas-un-uuid/identity', { token: tokens.root })).status, 400);
+        // retrait du logo de l'école -> retour au logo de la plateforme ; réinitialisation complète (superadmin)
+        assert.equal((await api('DELETE', `${PT}/logo`, { token: tokens.root })).status, 200);
         assert.equal((await api('GET', '/api/settings/identity', { token: tokens.adminA })).json.data.effective.logo_source, 'platform');
-        assert.equal((await api('DELETE', '/api/settings/identity', { token: tokens.userA })).status, 403);
-        assert.equal((await api('DELETE', '/api/settings/identity', { token: tokens.adminA })).status, 200);
+        assert.equal((await api('DELETE', PT, { token: tokens.root })).status, 200);
         assert.equal((await api('GET', '/api/settings/identity', { token: tokens.adminA })).json.data.effective.app_name, 'EduMali');
         // nettoyage de la plateforme
         assert.equal((await api('DELETE', '/api/platform/identity', { token: tokens.root })).status, 200);
@@ -1732,7 +1752,7 @@ if (!TEST_URL) {
       });
 
       it('logo PNG valide : bulletin avec image intégrée', async () => {
-        assert.equal((await api('PUT', '/api/settings/identity/logo', { token: tokens.adminA, raw: realPng(128, 128), headers: { 'Content-Type': 'image/png' } })).status, 200);
+        assert.equal((await api('PUT', `/api/platform/tenants/${TA}/identity/logo`, { token: tokens.root, raw: realPng(128, 128), headers: { 'Content-Type': 'image/png' } })).status, 200);
         const r = await bulletin();
         assert.equal(r.status, 200); assert.ok(r.txt.includes('/Subtype /Image'));
       });
@@ -1744,8 +1764,8 @@ if (!TEST_URL) {
       });
 
       it('suppression du logo : retour au bulletin sans image', async () => {
-        assert.equal((await api('PUT', '/api/settings/identity/logo', { token: tokens.adminA, raw: realPng(128, 128), headers: { 'Content-Type': 'image/png' } })).status, 200);
-        assert.equal((await api('DELETE', '/api/settings/identity/logo', { token: tokens.adminA })).status, 200);
+        assert.equal((await api('PUT', `/api/platform/tenants/${TA}/identity/logo`, { token: tokens.root, raw: realPng(128, 128), headers: { 'Content-Type': 'image/png' } })).status, 200);
+        assert.equal((await api('DELETE', `/api/platform/tenants/${TA}/identity/logo`, { token: tokens.root })).status, 200);
         const r = await bulletin();
         assert.equal(r.status, 200); assert.ok(!r.txt.includes('/Subtype /Image'));
       });

@@ -147,3 +147,15 @@ Limites : il s’agit d’une copie de test alimentée par l’API de la version
 - Tests unitaires 32/32 (PNG RGBA, palette avec tRNS, filtre Sub, JPEG, WebP refusé, XObject). Intégration 108/108 : sans logo, logo valide intégré, logo illisible sans échec de génération, suppression.
 - Vérification visuelle : bulletin, reçu avec logo PNG semi-transparent. Palette à transparence et JPEG vérifiés séparément.
 - Limite connue : les factures et les reçus longs ne sont pas paginés automatiquement (cas courants : une page).
+
+### 7.9 Identité et affiche de l’application réservées au superadmin — Réalisé et vérifié
+Demande du 19/11/2026 : seul le superadmin modifie l’identité visible du site ; un établissement ne gère que ses comptes et sous-comptes.
+- Nom, slogan et logo de l’établissement (`tenant_identity`) : écriture refusée (403) à l’établissement, y compris à son administrateur. Lecture conservée pour tous les utilisateurs (`GET /api/settings/identity`, `/logo`).
+- Affiche d’accueil (`tenant_banners`) : `PUT /api/settings/banner/image`, `PUT /api/settings/banner/text`, `DELETE /api/settings/banner` renvoient 403. Lecture conservée (`GET /api/settings/banner`, `/image`).
+- Nouvelles routes superadmin, montées sous `/api/platform` (garde `requireSuperAdmin`) et ciblant un établissement vérifié (UUID valide : 400 ; établissement inexistant : 404) :
+  - `GET | PUT | DELETE /api/platform/tenants/:tenantId/identity[/text|/logo]`
+  - `GET | PUT | DELETE /api/platform/tenants/:tenantId/banner[/text|/image]`
+- Hypothèse retenue (à confirmer) : le logo utilisé sur les bulletins et reçus de l’établissement est, lui aussi, géré par le superadmin.
+- Frontend : sections identité et affiche retirées des Paramètres de l’établissement (remplacées par une mention explicative) ; ajoutées à la fiche établissement du superadmin, avec aperçu propre à cet établissement. L’aperçu n’altère plus l’identité affichée à la session.
+- Tests : unitaires 32/32 ; intégration 108/108 (écritures établissement → 403, superadmin → 200, cross-établissement, UUID invalide, établissement inconnu, logo des bulletins écrit par le superadmin).
+- Non vérifié : parcours navigateur de la fiche établissement (aucune recette automatisée sur cet écran).
