@@ -123,3 +123,10 @@ Protocole (19/11/2026) :
 5. Serveur de la branche sur la base restaurée : bulletin de l’élève test à 4 matières (moyennes 11, 6, 6, 16) ; 32 notes `validee` ; 32 statuts d’origine conservés ; 1 entrée d’audit `grade.backfill_validated` ; barème 20 ; message présent.
 
 Limites : il s’agit d’une copie de test alimentée par l’API de la version `main`, pas d’une base de production. La mise à niveau d’une base réelle reste à faire après sauvegarde sur le serveur de l’établissement.
+
+### 7.6 Moteur PDF refondu et bulletin redessiné — Réalisé et vérifié
+- Moteur (`backend/src/utils/pdf.js`), sans nouvelle dépendance : couleurs RGB et hexadécimales, rectangles arrondis, tracés, polygones, cercles, flux compressés (FlateDecode), navigation entre pages pour les pieds de page numérotés. L’API existante est conservée : les reçus et les factures continuent de fonctionner sans modification.
+- Bulletin (`backend/src/utils/reportCardPdf.js`) : bandeau de marque avec filet d’accent ; carte élève ; quatre cartes d’indicateurs colorées (moyenne, rang, mention, nombre de matières) ; graphique horizontal des moyennes ramenées sur 20 avec trait du seuil 10/20 (jusqu’à 12 matières) ; tableau à lignes alternées avec en-tête répété à chaque page ; appréciation dans un encadré ; décision du conseil ; signatures en bas de la dernière page ; pied de page « Page X / Y » sur chaque page.
+- Tests : unitaires 28/28 (ajout : couleurs, arrondis, compression, pieds de page, bulletin) ; intégration 104/104 (les assertions sur le texte des PDF lisent désormais le contenu décompressé).
+- Vérification visuelle : rendu contrôlé page par page (bulletin de 8 matières sur 2 pages, bulletin de 30 matières sur 2 pages avec en-tête répété et lignes alternées). Deux défauts trouvés et corrigés pendant la vérification : création de page incorrecte et chevauchement des libellés d’en-tête.
+- Hors périmètre de cette livraison : les reçus et les factures utilisent toujours leur mise en page actuelle (même moteur, nouvelle mise en page à prévoir).

@@ -10,6 +10,8 @@ process.env.LOGIN_MAX_ATTEMPTS = '6';
 
 const { describe, it, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
+// Texte d'un PDF : contenu des pages décompressé (flux FlateDecode) + en-tête/métadonnées brutes.
+const pdfText = (buf) => [...buf.toString('latin1').matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)].map((m) => require('node:zlib').inflateSync(Buffer.from(m[1], 'latin1')).toString('latin1')).join('\n') + buf.toString('latin1');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -1163,7 +1165,7 @@ if (!TEST_URL) {
         const att = /Content-Disposition: attachment[^\r\n]*\r\n\r\n([\s\S]*?)\r\n--smp_mix_/.exec(raw);
         assert.ok(att, 'pièce jointe introuvable');
         const pdfBuf = Buffer.from(att[1].replace(/\r\n/g, ''), 'base64');
-        assert.equal(pdfBuf.subarray(0, 5).toString(), '%PDF-'); assert.ok(pdfBuf.toString('latin1').includes(inv.number));
+        assert.equal(pdfBuf.subarray(0, 5).toString(), '%PDF-'); assert.ok(pdfText(pdfBuf).includes(inv.number));
         // téléchargement direct : superadmin uniquement
         const dl = await fetch(`${base}/api/platform/invoices/${inv.id}/pdf`, { headers: { Authorization: `Bearer ${tokens.root}` } });
         assert.equal(dl.status, 200); assert.match(dl.headers.get('content-type'), /application\/pdf/);
@@ -1806,7 +1808,7 @@ if (!TEST_URL) {
         assert.equal(ok.status, 200); assert.match(ok.headers.get('content-type'), /application\/pdf/); assert.match(ok.headers.get('content-disposition'), /bulletin-portail-aminata\.pdf/);
         const buf = Buffer.from(await ok.arrayBuffer());
         assert.equal(buf.subarray(0, 5).toString(), '%PDF-'); assert.match(buf.subarray(-6).toString(), /%%EOF/);
-        assert.ok(buf.toString('latin1').includes('Aminata Portail'));
+        assert.ok(pdfText(buf).includes('Aminata Portail'));
         const start = Number(/startxref\n(\d+)/.exec(buf.toString('latin1'))[1]);
         assert.equal(buf.subarray(start, start + 4).toString(), 'xref');
         assert.equal((await api('GET', `/api/students/${s1}/report-card.pdf?from=pas-une-date`, { token: tokens.adminA })).status, 400);
@@ -1831,7 +1833,7 @@ if (!TEST_URL) {
         const ok = await get(`/api/payments/${pay.id}/receipt.pdf`, tokens.adminA);
         assert.equal(ok.status, 200); assert.match(ok.headers.get('content-type'), /application\/pdf/);
         const buf = Buffer.from(await ok.arrayBuffer()).toString('latin1');
-        assert.ok(buf.startsWith('%PDF-')); assert.ok(buf.includes(pay.receipt_number)); assert.ok(buf.includes('Aminata Portail')); assert.ok(buf.includes('Quatre-vingt-cinq mille francs CFA'));
+        assert.ok(buf.startsWith('%PDF-')); const txt = pdfText(Buffer.from(buf, 'latin1')); assert.ok(txt.includes(pay.receipt_number)); assert.ok(txt.includes('Aminata Portail')); assert.ok(txt.includes('Quatre-vingt-cinq mille francs CFA'));
         assert.equal((await get(`/api/payments/${pend.id}/receipt.pdf`, tokens.adminA)).status, 409);
         assert.equal((await get(`/api/payments/${pay.id}/receipt.pdf`, tokens.adminB)).status, 404);
         assert.equal((await get('/api/payments/pas-un-uuid/receipt.pdf', tokens.adminA)).status, 400);

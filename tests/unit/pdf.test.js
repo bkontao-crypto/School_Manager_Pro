@@ -1,6 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const zlib = require('node:zlib');
 const { Pdf, textWidth, wrap, clean } = require('../../backend/src/utils/pdf');
+// Contenu des pages, décompressé (les flux sont en FlateDecode).
+const contents = (buf) => [...buf.toString('latin1').matchAll(/stream\n([\s\S]*?)\nendstream/g)].map((m) => zlib.inflateSync(Buffer.from(m[1], 'latin1')).toString('latin1')).join('\n');
 const { renderReportCard } = require('../../backend/src/utils/reportCardPdf');
 
 test('PDF : structure valide, table xref exacte, accents en WinAnsi', () => {
@@ -11,8 +14,9 @@ test('PDF : structure valide, table xref exacte, accents en WinAnsi', () => {
   assert.equal(txt.slice(start, start + 4), 'xref');
   const entries = [...txt.slice(start).matchAll(/(\d{10}) 00000 n/g)].map((m) => Number(m[1]));
   entries.forEach((o, i) => assert.match(txt.slice(o, o + 12), new RegExp(`^${i + 1} 0 obj`)));
-  assert.ok(txt.includes('\xc9l\xe8ve'.replace('è', 'e')) || txt.includes('\xc9l'));
-  assert.ok(txt.includes('a\\\\b'));
+  const c = contents(buf);
+  assert.ok(c.includes('\xc9l\xe8ve'));
+  assert.ok(c.includes('a\\\\b'));
 });
 
 test('PDF : caractères hors Latin-1 remplacés, largeur et retour à la ligne', () => {
@@ -34,4 +38,26 @@ test('Montant en lettres (reçus)', () => {
   const cases = { 0: 'zéro', 21: 'vingt et un', 71: 'soixante et onze', 80: 'quatre-vingts', 81: 'quatre-vingt-un', 100: 'cent', 200: 'deux cents', 201: 'deux cent un', 1000: 'mille', 2000: 'deux mille', 80000: 'quatre-vingt mille', 85000: 'quatre-vingt-cinq mille', 2000000: 'deux millions', 1234567: 'un million deux cent trente-quatre mille cinq cent soixante-sept' };
   for (const [n, txt] of Object.entries(cases)) assert.equal(w(Number(n)), txt, n);
   assert.equal(w(1e15), '');
+});
+
+test('PDF : couleurs RGB et hexadécimales, formes arrondies, compression', () => {
+  const buf = new Pdf().rect(0, 0, 100, 40, { fill: '#1E3A8A', radius: 8 }).rect(0, 0, 10, 10, { fill: [5, 150, 105], stroke: '#E2E8F0' }).circle(50, 50, 6, { fill: 0.5 }).polyline([[0, 0], [10, 10], [20, 5]], { color: '#DC2626' }).toBuffer();
+  const c = contents(buf);
+  assert.match(c, / rg\n|rg /); assert.match(c, /RG/); assert.match(c, / c\n|c h/); assert.match(c, / B\n| B/);
+  assert.ok(buf.toString('latin1').includes('/Filter /FlateDecode'));
+});
+
+test('PDF : pieds de page numérotés en fin de rédaction (goto)', () => {
+  const pdf = new Pdf().text(50, 700, 'corps'); pdf.addPage().text(50, 700, 'suite');
+  for (let i = 0; i < pdf.pageCount; i++) pdf.goto(i).text(300, 20, `Page ${i + 1} / ${pdf.pageCount}`);
+  const c = contents(pdf.toBuffer());
+  assert.ok(c.includes('Page 1 / 2') && c.includes('Page 2 / 2'));
+});
+
+test('Bulletin PDF : bandeau, indicateurs, graphique et pied de page sur chaque page', () => {
+  const subjects = Array.from({ length: 8 }, (_, i) => ({ subject: `Matière ${i}`, coefficient: 2, notes: 2, average: 4 + i * 2, mention: i > 5 ? 'Bien' : 'Insuffisant' }));
+  const buf = renderReportCard({ student: { first_name: 'Awa', last_name: 'Traoré', matricule: 'M1', class_name: 'T1', school_year: '2026-2027' }, period: { from: '2026-10-01', to: null }, subjects, grade_scale_max: 20, overall_average: 11, rank: 3, class_size: 30, mention: 'Passable', comment: { teacher_comment: 'Bien.', council_decision: 'Admis' } }, 'École');
+  const c = contents(buf);
+  assert.ok(c.includes('Page 1 / ') && c.includes('MOYENNE G'));
+  assert.ok(/ rg\n| rg /.test(c), 'couleurs de marque présentes');
 });
