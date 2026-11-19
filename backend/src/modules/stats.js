@@ -5,11 +5,18 @@
 const express = require('express');
 const db = require('../utils/db');
 const { wrap } = require('../utils/http');
+const { permissionsFor } = require('../utils/permissions');
 
 const router = express.Router();
 
 router.get('/dashboard', wrap(async (req, res) => {
   const t = req.tenantId;
+  // Garde par module (ordonnance §4.2) : les encaissements suivent le droit de lecture du module « payments » ;
+  // le journal d'audit est réservé à l'administrateur.
+  const perms = await permissionsFor(t, req.user.role);
+  const canPayments = perms.payments === 'read' || perms.payments === 'write';
+  const isAdmin = req.user.role === 'admin';
+  const empty = (rows) => Promise.resolve({ rows });
   const [counts, month, series, recent, activity] = await Promise.all([
     db.query(
       `SELECT
@@ -22,31 +29,31 @@ router.get('/dashboard', wrap(async (req, res) => {
             AND status IN ('present', 'late')) AS attendance_present`,
       [t]
     ),
-    db.query(
+    canPayments ? db.query(
       `SELECT COALESCE(SUM(amount), 0) AS total, count(*) AS count FROM payments
         WHERE tenant_id = $1 AND status = 'paye'
           AND paid_at >= date_trunc('month', now()) AND paid_at < date_trunc('month', now()) + interval '1 month'`,
       [t]
-    ),
-    db.query(
+    ) : empty([{ total: 0, count: 0 }]),
+    canPayments ? db.query(
       `SELECT to_char(m.month, 'YYYY-MM') AS month, COALESCE(SUM(p.amount), 0) AS total
          FROM generate_series(date_trunc('month', now()) - interval '5 months', date_trunc('month', now()), interval '1 month') AS m(month)
          LEFT JOIN payments p ON p.tenant_id = $1 AND p.status = 'paye' AND date_trunc('month', p.paid_at) = m.month
         GROUP BY m.month ORDER BY m.month`,
       [t]
-    ),
-    db.query(
+    ) : empty([]),
+    canPayments ? db.query(
       `SELECT p.id, s.first_name || ' ' || s.last_name AS student_name, p.amount, p.fee_type, p.status, p.paid_at
          FROM payments p JOIN students s ON s.id = p.student_id AND s.tenant_id = p.tenant_id
         WHERE p.tenant_id = $1 ORDER BY p.paid_at DESC LIMIT 5`,
       [t]
-    ),
-    db.query(
+    ) : empty([]),
+    isAdmin ? db.query(
       `SELECT a.action, a.entity, a.created_at, u.full_name AS user_name
          FROM audit_logs a LEFT JOIN users u ON u.id = a.user_id
         WHERE a.tenant_id = $1 AND a.action <> 'auth.login' ORDER BY a.created_at DESC LIMIT 6`,
       [t]
-    )
+    ) : empty([])
   ]);
 
   const c = counts.rows[0];

@@ -72,9 +72,9 @@ async function runReminders({ now = today(), dryRun = false } = {}) {
   }
 
   for (const it of items) {
-    const logged = await db.query('SELECT 1 FROM notification_log WHERE kind = $1 AND ref = $2', [it.kind, it.ref]);
+    const logged = await db.query('SELECT 1 FROM notification_log WHERE kind = $1 AND ref = $2 AND tenant_id IS NOT DISTINCT FROM $3', [it.kind, it.ref, it.tenantId]);
     if (logged.rows.length) continue;
-    const failures = await db.query(`SELECT count(*) AS n FROM mail_outbox WHERE ref = $1 AND status = 'failed'`, [it.ref]);
+    const failures = await db.query(`SELECT count(*) AS n FROM mail_outbox WHERE ref = $1 AND status = 'failed' AND tenant_id IS NOT DISTINCT FROM $2`, [it.ref, it.tenantId]);
     if (Number(failures.rows[0].n) >= MAX_FAILED_ATTEMPTS) continue;       // abandonné après 3 échecs
     const to = await tenantRecipients(it.tenantId);
     out.due.push({ kind: it.kind, label: it.label, to });

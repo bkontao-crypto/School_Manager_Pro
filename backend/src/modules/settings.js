@@ -21,6 +21,22 @@ settings.get('/', wrap(async (req, res) => {
   if (!r.rows.length) throw new HttpError(404, 'Établissement introuvable.');
   res.json({ data: r.rows[0] });
 }));
+// Barème des notes (§5.1) : lecture pour tous, changement réservé à l'administrateur, refusé si une note dépasse le nouveau barème.
+settings.get('/grading', wrap(async (req, res) => {
+  const r = await db.query('SELECT grade_scale_max FROM tenants WHERE id = $1', [req.tenantId]);
+  if (!r.rows.length) throw new HttpError(404, 'Établissement introuvable.');
+  res.json({ data: { grade_scale_max: Number(r.rows[0].grade_scale_max) } });
+}));
+settings.put('/grading', requireRole('admin'), wrap(async (req, res) => {
+  const raw = req.body && req.body.grade_scale_max;
+  const max = typeof raw === 'number' ? raw : NaN;
+  if (![10, 20].includes(max)) throw new HttpError(400, 'Barème invalide : 10 ou 20.');
+  const over = await db.query('SELECT count(*)::int AS n FROM grades WHERE tenant_id = $1 AND score > $2', [req.tenantId, max]);
+  if (over.rows[0].n > 0) throw new HttpError(409, `${over.rows[0].n} note(s) dépassent ce barème : corrigez-les avant de le changer.`);
+  await db.query('UPDATE tenants SET grade_scale_max = $2 WHERE id = $1', [req.tenantId, max]);
+  await audit(req, { action: 'settings.grading', entity: 'tenant', entityId: req.tenantId, details: { grade_scale_max: max } });
+  res.json({ data: { grade_scale_max: max } });
+}));
 settings.put('/', requireRole('admin'), wrap(async (req, res) => {
   const { values, errors } = validate(req.body, { name: { type: 'string', required: true, max: 255 } });
   if (errors.length) return invalid(res, errors);
@@ -159,7 +175,7 @@ settings.post('/subscription/invoices/:id/pay-online', requireRole('admin'), wra
 
 const users = express.Router();
 users.use(requireRole('admin'));
-const ROLES = ['admin', 'teacher', 'accountant', 'user'];
+const ROLES = ['admin', 'gerant', 'teacher', 'accountant', 'user'];
 
 users.get('/', wrap(async (req, res) => {
   const { limit, offset } = pageParams(req.query);

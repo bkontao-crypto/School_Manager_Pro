@@ -10,6 +10,8 @@ process.env.LOGIN_MAX_ATTEMPTS = '6';
 
 const { describe, it, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
+// Texte d'un PDF : contenu des pages décompressé (flux FlateDecode) + en-tête/métadonnées brutes.
+const pdfText = (buf) => [...buf.toString('latin1').matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)].map((m) => require('node:zlib').inflateSync(Buffer.from(m[1], 'latin1')).toString('latin1')).join('\n') + buf.toString('latin1');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -25,6 +27,8 @@ if (!TEST_URL) {
     throw new Error(`Refus : la base de test doit se terminer par "_test" (reçu : "${dbName}").`);
   }
   process.env.DATABASE_URL = TEST_URL;
+  // Stockage des documents : dossier temporaire propre à cette exécution (jamais le dossier réel).
+  process.env.DOCUMENTS_DIR = require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'smp-docs-test-'));
 
   const { Pool } = require('pg');
   const { createApp } = require('../../backend/src/index');
@@ -514,7 +518,8 @@ if (!TEST_URL) {
         assert.equal(list.json.data.length, 1);
         assert.ok(list.json.data[0].sender_id);
         const foreign = await api('POST', '/api/messages/messages', { token: tokens.adminB, body: { conversation_id: c.json.data.id, content: 'Intrusion' } });
-        assert.equal(foreign.status, 422);
+        // Autre établissement : la conversation est traitée comme inexistante (404, D3).
+        assert.equal(foreign.status, 404);
       });
     });
 
@@ -638,9 +643,18 @@ if (!TEST_URL) {
         const cls = (await api('POST', '/api/classes', { token: tokens.adminA, body: { name: 'BUL 5e' } })).json.data.id;
         const mkStu = async (m) => (await api('POST', '/api/students', { token: tokens.adminA, body: { matricule: m, first_name: m, last_name: 'Bul', class_id: cls } })).json.data.id;
         const [a, b] = [await mkStu('BUL-A'), await mkStu('BUL-B')];
-        const g = (student_id, subject, score, coefficient) => api('POST', '/api/grades', { token: tokens.adminA, body: { student_id, subject, score, coefficient } });
+        // Seules les notes validées entrent dans le bulletin (§4.5) : chaque note est validée après saisie.
+        const g = async (student_id, subject, score, coefficient) => {
+          const r = await api('POST', '/api/grades', { token: tokens.adminA, body: { student_id, subject, score, coefficient } });
+          const v = await api('POST', `/api/grades/${r.json.data.id}/validate`, { token: tokens.adminA });
+          assert.equal(v.status, 200);
+          return r;
+        };
         await g(a, 'Maths', 18, 3); await g(a, 'Maths', 12, 1); await g(a, 'Français', 10, 2);
         await g(b, 'Maths', 8, 3); await g(b, 'Français', 9, 2);
+        // Une note encore en saisie n'apparaît pas dans le bulletin.
+        await api('POST', '/api/grades', { token: tokens.adminA, body: { student_id: a, subject: 'Sport', score: 2, coefficient: 1 } });
+        assert.equal((await api('GET', `/api/students/${a}/report-card`, { token: tokens.adminA })).json.data.subjects.some((x) => x.subject === 'Sport'), false);
         const r = await api('GET', `/api/students/${a}/report-card`, { token: tokens.userA });
         assert.equal(r.status, 200);
         const d = r.json.data;
@@ -675,8 +689,10 @@ if (!TEST_URL) {
         assert.equal((await api('DELETE', `/api/periods/${id}`, { token: tokens.adminA })).status, 200);
 
         const s = (await api('POST', '/api/students', { token: tokens.adminA, body: { matricule: 'PER-1', first_name: 'Per', last_name: 'Iode' } })).json.data.id;
-        await api('POST', '/api/grades', { token: tokens.adminA, body: { student_id: s, subject: 'Maths', score: 10, date: '2026-10-10' } });
-        await api('POST', '/api/grades', { token: tokens.adminA, body: { student_id: s, subject: 'Maths', score: 16, date: '2027-02-10' } });
+        for (const [score, date] of [[10, '2026-10-10'], [16, '2027-02-10']]) {
+          const n = await api('POST', '/api/grades', { token: tokens.adminA, body: { student_id: s, subject: 'Maths', score, date } });
+          assert.equal((await api('POST', `/api/grades/${n.json.data.id}/validate`, { token: tokens.adminA })).status, 200);
+        }
         const t1 = (await api('GET', `/api/students/${s}/report-card?from=2026-09-15&to=2026-12-20`, { token: tokens.adminA })).json.data;
         assert.equal(t1.overall_average, 10);
         const all = (await api('GET', `/api/students/${s}/report-card`, { token: tokens.adminA })).json.data;
@@ -686,6 +702,10 @@ if (!TEST_URL) {
       it('messages : le fil indique l’expéditeur, RH / documents / stocks fonctionnent', async () => {
         const c = (await api('POST', '/api/messages/conversations', { token: tokens.adminA, body: { title: 'Équipe', type: 'group' } })).json.data.id;
         await api('POST', '/api/messages/messages', { token: tokens.adminA, body: { conversation_id: c, content: 'Premier' } });
+        // Non participant : l'enseignant ne peut ni écrire ni lire (conversation inexistante pour lui, §4.1).
+        assert.equal((await api('POST', '/api/messages/messages', { token: tokens.teacherA, body: { conversation_id: c, content: 'Avant' } })).status, 404);
+        const teacherId = (await api('GET', '/api/auth/me', { token: tokens.teacherA })).json.data.id;
+        assert.equal((await api('POST', `/api/messages/conversations/${c}/participants`, { token: tokens.adminA, body: { user_id: teacherId } })).status, 201);
         await api('POST', '/api/messages/messages', { token: tokens.teacherA, body: { conversation_id: c, content: 'Second' } });
         const thread = await api('GET', `/api/messages/messages?conversation_id=${c}`, { token: tokens.adminA });
         assert.equal(thread.json.data.length, 2);
@@ -758,6 +778,19 @@ if (!TEST_URL) {
         const reset = (await api('GET', '/api/settings/banner', { token: tokens.adminA })).json.data;
         assert.equal(reset.custom, false);
         assert.equal(reset.title, null);
+      });
+
+      it('superadmin : édite l’identité d’un établissement ; l’établissement la voit, mais ne touche pas au site', async () => {
+        const PT = `/api/platform/tenants/${TA}/identity`;
+        assert.equal((await api('PUT', `${PT}/text`, { token: tokens.root, body: { app_name: 'Les Étoiles', slogan: 'Réussir ensemble' } })).status, 200);
+        assert.equal((await api('GET', '/api/settings/identity', { token: tokens.userA })).json.data.effective.app_name, 'Les Étoiles');
+        assert.equal((await api('PUT', `${PT}/text`, { token: tokens.adminA, body: { app_name: 'X' } })).status, 403);
+        assert.equal((await api('GET', PT, { token: tokens.adminA })).status, 403);
+        assert.equal((await api('GET', '/api/platform/tenants/pas-un-uuid/identity', { token: tokens.root })).status, 400);
+        assert.equal((await api('GET', '/api/platform/tenants/cccccccc-cccc-4ccc-8ccc-cccccccccccc/identity', { token: tokens.root })).status, 404);
+        // le nom du site (plateforme) reste hors de portée de l'établissement
+        assert.equal((await api('PUT', '/api/platform/identity/text', { token: tokens.adminA, body: { app_name: 'Pirate' } })).status, 403);
+        assert.equal((await api('DELETE', PT, { token: tokens.root })).status, 200);
       });
     });
 
@@ -1145,7 +1178,7 @@ if (!TEST_URL) {
         const att = /Content-Disposition: attachment[^\r\n]*\r\n\r\n([\s\S]*?)\r\n--smp_mix_/.exec(raw);
         assert.ok(att, 'pièce jointe introuvable');
         const pdfBuf = Buffer.from(att[1].replace(/\r\n/g, ''), 'base64');
-        assert.equal(pdfBuf.subarray(0, 5).toString(), '%PDF-'); assert.ok(pdfBuf.toString('latin1').includes(inv.number));
+        assert.equal(pdfBuf.subarray(0, 5).toString(), '%PDF-'); assert.ok(pdfText(pdfBuf).includes(inv.number));
         // téléchargement direct : superadmin uniquement
         const dl = await fetch(`${base}/api/platform/invoices/${inv.id}/pdf`, { headers: { Authorization: `Bearer ${tokens.root}` } });
         assert.equal(dl.status, 200); assert.match(dl.headers.get('content-type'), /application\/pdf/);
@@ -1397,6 +1430,340 @@ if (!TEST_URL) {
       });
     });
 
+    // ---------------------------------------------------------------- Phase 1 : notes, corrections, périodes, gérant, participants
+    describe('Phase 1 : cycle des notes, corrections, périodes, rôle gérant, participants', () => {
+      const GERANT_PWD = 'Gerant-Pass-2026';
+      let tokGerant; let stu; let grade;
+      const createGrade = (body) => api('POST', '/api/grades', { token: tokens.adminA, body: { student_id: stu, subject: 'Physique', score: 12, coefficient: 1, ...body } });
+      const scoreOf = async (id) => Number((await api('GET', `/api/grades?student_id=${stu}`, { token: tokens.adminA })).json.data.find((g) => g.id === id).score);
+
+      before(async () => {
+        stu = (await api('POST', '/api/students', { token: tokens.adminA, body: { matricule: 'P1-STU', first_name: 'Phase', last_name: 'Un' } })).json.data.id;
+        const u = await api('POST', '/api/users', { token: tokens.adminA, body: { email: 'gerant@a.test', full_name: 'Gérant A', role: 'gerant', password: GERANT_PWD } });
+        assert.equal(u.status, 201);
+        tokGerant = await login('gerant@a.test', 'ECOLEA', GERANT_PWD);
+        grade = (await createGrade({ score: 9 })).json.data.id;
+      });
+
+      it('une note est créée en saisie, quel que soit le statut envoyé ; validation et annulation contrôlées', async () => {
+        const forced = await createGrade({ status: 'validee' });
+        assert.equal(forced.status, 201);
+        assert.equal(forced.json.data.status, 'saisie');
+        const id = forced.json.data.id;
+        assert.equal((await api('POST', `/api/grades/${id}/validate`, { token: tokens.teacherA })).status, 403);
+        assert.equal((await api('POST', `/api/grades/${id}/validate`, { token: tokens.adminA })).status, 200);
+        assert.equal((await api('POST', `/api/grades/${id}/validate`, { token: tokens.adminA })).status, 409);
+        assert.equal((await api('POST', `/api/grades/${id}/cancel`, { token: tokens.adminA })).status, 409);
+        const other = (await createGrade({})).json.data.id;
+        assert.equal((await api('POST', `/api/grades/${other}/cancel`, { token: tokens.adminA })).status, 200);
+        assert.equal((await api('POST', `/api/grades/${other}/cancel`, { token: tokens.adminA })).status, 409);
+        assert.equal((await api('POST', `/api/grades/${other}/validate`, { token: tokens.adminB })).status, 404); // autre établissement
+      });
+
+      it('correction : demande avec motif, une seule en attente, décision par un administrateur différent du demandeur', async () => {
+        assert.equal((await api('POST', `/api/grades/${grade}/validate`, { token: tokens.adminA })).status, 200);
+        const req = (tok, body) => api('POST', `/api/grades/${grade}/corrections`, { token: tok, body });
+        assert.equal((await req(tokens.userA, { score: 14, reason: 'Erreur de saisie' })).status, 403);     // pas d'écriture sur les notes
+        assert.equal((await req(tokens.teacherA, { score: 14, reason: 'abc' })).status, 400);             // motif trop court
+        assert.equal((await req(tokens.teacherA, { score: 25, reason: 'Erreur de saisie' })).status, 400); // note hors barème
+        const c = await req(tokens.teacherA, { score: 14, reason: 'Erreur de saisie' });
+        assert.equal(c.status, 201);
+        assert.equal(c.json.data.status, 'pending');
+        assert.ok((await api('GET', '/api/grades/corrections/mine', { token: tokens.teacherA })).json.data.some((x) => x.id === c.json.data.id));
+        assert.equal((await api('GET', '/api/grades/corrections/mine', { token: tokens.userA })).status, 403);
+        assert.equal((await req(tokens.teacherA, { score: 13, reason: 'Autre demande' })).status, 409);
+        assert.equal(await scoreOf(grade), 9, 'la note ne change pas avant décision');
+
+        const pending = await api('GET', '/api/grades/corrections', { token: tokens.adminA });
+        assert.ok(pending.json.data.some((x) => x.id === c.json.data.id));
+        assert.equal((await api('GET', '/api/grades/corrections', { token: tokens.teacherA })).status, 403);
+
+        const cid = c.json.data.id;
+        assert.equal((await api('POST', `/api/grades/corrections/${cid}/approve`, { token: tokens.teacherA, body: { reason: 'Je valide' } })).status, 403);
+        assert.equal((await api('POST', `/api/grades/corrections/${cid}/approve`, { token: tokens.adminA, body: {} })).status, 400); // motif obligatoire
+        assert.equal((await api('POST', `/api/grades/corrections/${cid}/approve`, { token: tokens.adminB, body: { reason: 'Autre école' } })).status, 404);
+        assert.equal((await api('POST', `/api/grades/corrections/${cid}/approve`, { token: tokens.adminA, body: { reason: 'Vérifié sur copie' } })).status, 200);
+        assert.equal(await scoreOf(grade), 14);
+        assert.equal((await api('POST', `/api/grades/corrections/${cid}/approve`, { token: tokens.adminA, body: { reason: 'Encore' } })).status, 409);
+      });
+
+      it('le demandeur ne peut jamais décider de sa propre correction ; rejet sans effet sur la note', async () => {
+        // Rejet par un administrateur d'une proposition d'enseignant : la note ne change pas.
+        const rejected = await api('POST', `/api/grades/${grade}/corrections`, { token: tokens.teacherA, body: { score: 17, reason: 'Proposition' } });
+        assert.equal(rejected.status, 201);
+        assert.equal((await api('POST', `/api/grades/corrections/${rejected.json.data.id}/reject`, { token: tokens.adminA, body: { reason: 'Pas de preuve' } })).status, 200);
+        assert.equal(await scoreOf(grade), 14, 'un rejet ne modifie pas la note');
+        // Demande de l'administrateur lui-même : il ne peut pas la décider, mais il peut la retirer (décision 1).
+        const own = await api('POST', `/api/grades/${grade}/corrections`, { token: tokens.adminA, body: { score: 15, reason: 'Correction admin' } });
+        assert.equal(own.status, 201);
+        const cid = own.json.data.id;
+        assert.equal((await api('POST', `/api/grades/corrections/${cid}/approve`, { token: tokens.adminA, body: { reason: 'Moi-même' } })).status, 403);
+        assert.equal((await api('POST', `/api/grades/corrections/${cid}/reject`, { token: tokens.adminA, body: { reason: 'Non justifié' } })).status, 403);
+        assert.equal(await scoreOf(grade), 14);
+        assert.equal((await api('POST', `/api/grades/corrections/${cid}/withdraw`, { token: tokens.teacherA, body: { reason: 'Pas le mien' } })).status, 403);
+        assert.equal((await api('POST', `/api/grades/corrections/${cid}/withdraw`, { token: tokens.adminA, body: { reason: 'Je retire' } })).status, 200);
+        assert.equal((await api('POST', `/api/grades/corrections/${cid}/withdraw`, { token: tokens.adminA, body: { reason: 'Encore' } })).status, 409);
+        assert.equal((await api('POST', `/api/grades/corrections/${cid}/approve`, { token: tokens.adminA, body: { reason: 'Trop tard' } })).status, 409);
+        assert.equal(await scoreOf(grade), 14, 'un retrait ne modifie pas la note');
+      });
+
+      it('une note non validée ne se corrige pas par cette procédure', async () => {
+        const draft = (await createGrade({ subject: 'Chimie' })).json.data.id;
+        assert.equal((await api('POST', `/api/grades/${draft}/corrections`, { token: tokens.teacherA, body: { score: 10, reason: 'Motif valable' } })).status, 409);
+      });
+
+      it('clôture de période : admin seul ; notes verrouillées ; suppression refusée ; réouverture avec motif', async () => {
+        const p = (await api('POST', '/api/periods', { token: tokens.adminA, body: { name: 'T-Clôture', start_date: '2025-01-01', end_date: '2025-03-31' } })).json.data.id;
+        assert.equal((await api('POST', `/api/periods/${p}/close`, { token: tokens.teacherA })).status, 403);
+        assert.equal((await api('POST', `/api/periods/${p}/close`, { token: tokens.adminB })).status, 404);
+        const inPeriod = (await createGrade({ subject: 'Histoire', date: '2025-02-10' })).json.data.id; // créée avant clôture : en saisie
+        assert.equal((await api('POST', `/api/periods/${p}/close`, { token: tokens.adminA })).status, 200);
+        assert.equal((await api('POST', `/api/periods/${p}/close`, { token: tokens.adminA })).status, 409);
+        assert.equal((await createGrade({ date: '2025-02-11' })).status, 409);                       // nouvelle note refusée
+        assert.equal((await api('POST', `/api/grades/${inPeriod}/validate`, { token: tokens.adminA })).status, 409); // validation refusée
+        assert.equal((await api('POST', `/api/grades/${inPeriod}/cancel`, { token: tokens.adminA })).status, 409);
+        assert.equal((await api('DELETE', `/api/periods/${p}`, { token: tokens.adminA })).status, 409);
+        assert.equal((await api('POST', `/api/periods/${p}/reopen`, { token: tokens.adminA, body: { reason: 'ab' } })).status, 400);
+        assert.equal((await api('POST', `/api/periods/${p}/reopen`, { token: tokens.teacherA, body: { reason: 'Motif suffisant' } })).status, 403);
+        assert.equal((await api('POST', `/api/periods/${p}/reopen`, { token: tokens.adminA, body: { reason: 'Note oubliée sur la copie' } })).status, 200);
+        assert.equal((await api('POST', `/api/grades/${inPeriod}/validate`, { token: tokens.adminA })).status, 200);
+        assert.equal((await api('POST', `/api/periods/${p}/reopen`, { token: tokens.adminA, body: { reason: 'Déjà ouverte' } })).status, 409);
+        const audit = (await pool.query(`SELECT count(*)::int AS n FROM audit_logs WHERE tenant_id = $1 AND action IN ('academic_period.close', 'academic_period.reopen')`, [TA])).rows[0].n;
+        assert.ok(audit >= 2);
+      });
+
+      it('rôle gérant : peut rouvrir une période ; pas de paiements, RH ni clôture', async () => {
+        const p = (await api('POST', '/api/periods', { token: tokens.adminA, body: { name: 'T-Gérant', start_date: '2025-04-01', end_date: '2025-06-30' } })).json.data.id;
+        assert.equal((await api('POST', `/api/periods/${p}/close`, { token: tokens.adminA })).status, 200);
+        assert.equal((await api('POST', `/api/periods/${p}/close`, { token: tokGerant })).status, 403);
+        assert.equal((await api('POST', `/api/periods/${p}/reopen`, { token: tokGerant, body: { reason: 'Rectification gérant' } })).status, 200);
+        assert.equal((await api('GET', '/api/payments', { token: tokGerant })).status, 403);
+        assert.equal((await api('GET', '/api/hr', { token: tokGerant })).status, 403);
+        assert.equal((await api('GET', '/api/grades', { token: tokGerant })).status, 200);
+      });
+
+      it('messagerie : retrait d’un participant, accès coupé immédiatement, lecture marquée par le participant seulement', async () => {
+        const c = (await api('POST', '/api/messages/conversations', { token: tokens.adminA, body: { title: 'Retrait', type: 'group' } })).json.data.id;
+        const userId = (await api('GET', '/api/auth/me', { token: tokens.userA })).json.data.id;
+        assert.equal((await api('POST', `/api/messages/conversations/${c}/participants`, { token: tokens.adminA, body: { user_id: userId } })).status, 201);
+        assert.equal((await api('POST', '/api/messages/messages', { token: tokens.userA, body: { conversation_id: c, content: 'Bonjour à tous' } })).status, 201);
+        assert.equal((await api('POST', `/api/messages/conversations/${c}/read`, { token: tokens.userA })).status, 200);
+        assert.equal((await api('POST', `/api/messages/conversations/${c}/read`, { token: tokens.teacherA })).status, 404); // non participant
+        assert.equal((await api('POST', `/api/messages/conversations/${c}/participants`, { token: tokens.userA, body: { user_id: userId } })).status, 403); // participant non gestionnaire
+        assert.equal((await api('DELETE', `/api/messages/conversations/${c}/participants/${userId}`, { token: tokens.adminA })).status, 200);
+        // Lecture : fil vide, sans fuite du contenu d'avant le retrait.
+        const thread = await api('GET', `/api/messages/messages?conversation_id=${c}`, { token: tokens.userA });
+        assert.equal(thread.status, 200);
+        assert.equal(thread.json.data.length, 0);
+        assert.equal((await api('POST', '/api/messages/messages', { token: tokens.userA, body: { conversation_id: c, content: 'Toujours là ?' } })).status, 404);
+        assert.equal((await api('DELETE', `/api/messages/conversations/${c}/participants/${userId}`, { token: tokens.adminA })).status, 404);
+      });
+    });
+
+    describe('Accusés de réception et de lecture (§4.1 point 6)', () => {
+      let conv; let msg; let teacherId; let userId;
+      const summary = async () => (await api('GET', `/api/messages/messages?conversation_id=${conv}`, { token: tokens.adminA })).json.data.find((m) => m.id === msg);
+
+      before(async () => {
+        conv = (await api('POST', '/api/messages/conversations', { token: tokens.adminA, body: { title: 'Accusés', type: 'group' } })).json.data.id;
+        teacherId = (await api('GET', '/api/auth/me', { token: tokens.teacherA })).json.data.id;
+        userId = (await api('GET', '/api/auth/me', { token: tokens.userA })).json.data.id;
+        await api('POST', `/api/messages/conversations/${conv}/participants`, { token: tokens.adminA, body: { user_id: teacherId } });
+        await api('POST', `/api/messages/conversations/${conv}/participants`, { token: tokens.adminA, body: { user_id: userId } });
+        msg = (await api('POST', '/api/messages/messages', { token: tokens.adminA, body: { conversation_id: conv, content: 'Réunion jeudi' } })).json.data.id;
+      });
+
+      it('à l’envoi : un accusé en attente par destinataire, expéditeur seulement en compteurs', async () => {
+        const m = await summary();
+        assert.equal(m.recipients_count, 2);
+        assert.equal(m.read_count, 0);
+      });
+
+      it('réception puis lecture par chaque destinataire ; compteurs mis à jour ; expéditeur sans accusé sur son propre message', async () => {
+        assert.equal((await api('POST', `/api/messages/conversations/${conv}/receive`, { token: tokens.teacherA })).json.data.delivered, 1);
+        assert.equal((await summary()).read_count, 0, 'réception ≠ lecture');
+        const read = await api('POST', `/api/messages/conversations/${conv}/read`, { token: tokens.userA });
+        assert.equal(read.status, 200);
+        assert.equal(read.json.data.marked, 1);
+        assert.equal((await summary()).read_count, 1);
+        assert.equal((await api('POST', `/api/messages/conversations/${conv}/read`, { token: tokens.teacherA })).json.data.marked, 1);
+        assert.equal((await summary()).read_count, 2);
+        assert.equal((await api('POST', `/api/messages/conversations/${conv}/read`, { token: tokens.adminA })).json.data.marked, 0);
+      });
+
+      it('un non-participant ne peut ni accuser réception ni lire ; aucun accusé hors de la conversation', async () => {
+        assert.equal((await api('POST', `/api/messages/conversations/${conv}/receive`, { token: tokens.accountantA })).status, 404);
+        assert.equal((await api('POST', `/api/messages/conversations/${conv}/read`, { token: tokens.accountantA })).status, 404);
+        assert.equal((await api('POST', `/api/messages/conversations/${conv}/receive`, { token: tokens.adminB })).status, 404);
+        assert.equal((await summary()).recipients_count, 2);
+      });
+
+      it('les accusés restent liés aux destinataires d’origine après retrait d’un participant (historique conservé)', async () => {
+        assert.equal((await api('DELETE', `/api/messages/conversations/${conv}/participants/${userId}`, { token: tokens.adminA })).status, 200);
+        assert.equal((await summary()).recipients_count, 2);
+        assert.equal((await summary()).read_count, 2);
+      });
+    });
+
+    describe('Documents : téléversement contrôlé, stockage privé, téléchargement authentifié (§4.4)', () => {
+      const PDF = Buffer.from('%PDF-1.4\n1 0 obj << >> endobj\n%%EOF\n');
+      const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('donnees')]);
+      const upload = (id, token, name, content, type) => {
+        const fd = new FormData();
+        fd.append('file', new Blob([content], { type: type || 'application/octet-stream' }), name);
+        return fetch(`${base}/api/documents/${id}/file`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
+      };
+      const download = (id, token) => fetch(`${base}/api/documents/${id}/file`, { headers: { Authorization: `Bearer ${token}` } });
+      const mkDoc = async (body, token = tokens.adminA) => (await api('POST', '/api/documents', { token, body: { title: 'Doc', status: 'publie', ...body } })).json.data.id;
+      let pub; let draft;
+
+      before(async () => { pub = await mkDoc({ title: 'Règlement intérieur' }); draft = await mkDoc({ title: 'Brouillon', status: 'brouillon' }); });
+
+      it('téléversement PDF valide : 201, nom d’origine conservé, nom de stockage aléatoire, pas de second fichier', async () => {
+        const r = await upload(pub, tokens.adminA, 'reglement.pdf', PDF, 'application/pdf');
+        assert.equal(r.status, 201);
+        const body = await r.json();
+        assert.equal(body.data.original_name, 'reglement.pdf');
+        assert.equal(body.data.storage_name, undefined, 'le nom de stockage ne sort pas de l’API');
+        assert.equal((await upload(pub, tokens.adminA, 'autre.pdf', PDF, 'application/pdf')).status, 409);
+        const files = require('node:fs').readdirSync(process.env.DOCUMENTS_DIR);
+        assert.equal(files.length, 1);
+        assert.match(files[0], /^[a-f0-9]{48}\.bin$/);
+        assert.ok(!files[0].includes('reglement'));
+      });
+
+      it('refuse un contenu qui ne correspond pas à l’extension ou au type, un type inconnu et un fichier trop gros', async () => {
+        const d = await mkDoc({ title: 'Refus' });
+        assert.equal((await upload(d, tokens.adminA, 'faux.pdf', Buffer.from('texte simple'), 'application/pdf')).status, 415);
+        assert.equal((await upload(d, tokens.adminA, 'script.exe', PDF, 'application/pdf')).status, 415);
+        assert.equal((await upload(d, tokens.adminA, 'page.html', Buffer.from('<script>x</script>'), 'text/html')).status, 415);
+        assert.equal((await upload(d, tokens.adminA, 'grand.pdf', Buffer.concat([PDF, Buffer.alloc(11 * 1024 * 1024)]), 'application/pdf')).status, 413);
+        assert.equal((await upload(d, tokens.adminA, 'image.png', PNG, 'image/png')).status, 201, 'PNG accepté');
+      });
+
+      it('droits : enseignant peut joindre, utilisateur simple non ; document introuvable dans un autre établissement', async () => {
+        const d = await mkDoc({ title: 'Par enseignant' }, tokens.teacherA);
+        assert.equal((await upload(d, tokens.userA, 'x.pdf', PDF, 'application/pdf')).status, 403);
+        assert.equal((await upload(d, tokens.teacherA, 'x.pdf', PDF, 'application/pdf')).status, 201);
+        assert.equal((await upload(pub, tokens.adminB, 'x.pdf', PDF, 'application/pdf')).status, 404);
+        assert.equal((await download(pub, tokens.adminB)).status, 404);
+      });
+
+      it('téléchargement : contenu exact, en pièce jointe, sans détection de type par le navigateur ; brouillon réservé aux rédacteurs', async () => {
+        const r = await download(pub, tokens.userA);
+        assert.equal(r.status, 200);
+        assert.equal(r.headers.get('content-type'), 'application/pdf');
+        assert.equal(r.headers.get('x-content-type-options'), 'nosniff');
+        assert.match(r.headers.get('content-disposition'), /^attachment; filename\*=UTF-8''reglement\.pdf$/);
+        assert.deepEqual(Buffer.from(await r.arrayBuffer()), PDF);
+        assert.equal((await upload(draft, tokens.adminA, 'projet.pdf', PDF, 'application/pdf')).status, 201);
+        assert.equal((await download(draft, tokens.userA)).status, 404);
+        assert.equal((await download(draft, tokens.teacherA)).status, 200);
+        assert.equal((await download('pas-un-uuid', tokens.adminA)).status, 400);
+      });
+
+      it('la liste n’expose ni chemin ni nom de stockage ; téléversements et téléchargements sont journalisés', async () => {
+        const list = await api('GET', '/api/documents?limit=50', { token: tokens.adminA });
+        const item = list.json.data.find((x) => x.id === pub);
+        assert.equal(item.original_name, 'reglement.pdf');
+        assert.equal(item.file_path, undefined);
+        assert.equal(item.storage_name, undefined);
+        const aud = (await pool.query(`SELECT count(*)::int AS n FROM audit_logs WHERE tenant_id = $1 AND action IN ('document.upload', 'document.download')`, [TA])).rows[0].n;
+        assert.ok(aud >= 3);
+      });
+    });
+
+    describe('Barème des notes par établissement (§5.1)', () => {
+      const PWD = 'Bareme-Pass-2026';
+      let tok; let stu; let tid;
+      before(async () => {
+        const c = await api('POST', '/api/platform/tenants', { token: tokens.root, body: { code: 'BAREME', name: 'École Barème', admin_email: 'dir@bareme.test', admin_full_name: 'Directeur Barème', admin_password: PWD } });
+        assert.equal(c.status, 201, c.text);
+        tok = await login('dir@bareme.test', 'BAREME', PWD);
+        tid = (await pool.query("SELECT id FROM tenants WHERE code='BAREME'")).rows[0].id;
+        stu = (await api('POST', '/api/students', { token: tok, body: { matricule: 'BAR-1', first_name: 'Bar', last_name: 'Eme' } })).json.data.id;
+      });
+
+      it('par défaut le barème est 20 ; lecture ouverte à tout utilisateur connecté', async () => {
+        const r = await api('GET', '/api/settings/grading', { token: tok });
+        assert.equal(r.status, 200);
+        assert.equal(r.json.data.grade_scale_max, 20);
+        assert.equal((await api('GET', '/api/settings/grading', { token: tokens.userA })).status, 200);
+        assert.equal((await api('GET', '/api/settings/grading')).status, 401);
+      });
+
+      it('seul l’administrateur modifie le barème ; valeur strictement 10 ou 20', async () => {
+        assert.equal((await api('PUT', '/api/settings/grading', { token: tokens.teacherA, body: { grade_scale_max: 10 } })).status, 403);
+        assert.equal((await api('PUT', '/api/settings/grading', { token: tok, body: { grade_scale_max: 15 } })).status, 400);
+        assert.equal((await api('PUT', '/api/settings/grading', { token: tok, body: { grade_scale_max: '10' } })).status, 400);
+        assert.equal((await api('PUT', '/api/settings/grading', { token: tok, body: {} })).status, 400);
+      });
+
+      it('sur 10 : une note au-dessus est refusée à la saisie et à l’insertion directe ; une note valide passe', async () => {
+        assert.equal((await api('PUT', '/api/settings/grading', { token: tok, body: { grade_scale_max: 10 } })).status, 200);
+        const over = await api('POST', '/api/grades', { token: tok, body: { student_id: stu, subject: 'Maths', score: 15, coefficient: 1 } });
+        assert.equal(over.status, 400, over.text);
+        assert.match(over.text, /barème/);
+        const ok = await api('POST', '/api/grades', { token: tok, body: { student_id: stu, subject: 'Maths', score: 8, coefficient: 1 } });
+        assert.equal(ok.status, 201, ok.text);
+        const direct = await pool.query('INSERT INTO grades (tenant_id, student_id, subject, score, coefficient, status) VALUES ($1,$2,$3,14,1,$4)', [tid, stu, 'Histoire', 'saisie']).then(() => 'inserted', (e) => e.message);
+        assert.match(direct, /barème/, 'le trigger doit refuser une insertion directe au-dessus du barème');
+      });
+
+      it('retour à 20 accepté ; repassage à 10 refusé tant qu’une note dépasse 10', async () => {
+        assert.equal((await api('PUT', '/api/settings/grading', { token: tok, body: { grade_scale_max: 20 } })).status, 200);
+        assert.equal((await api('POST', '/api/grades', { token: tok, body: { student_id: stu, subject: 'Physique', score: 15, coefficient: 1 } })).status, 201);
+        const blocked = await api('PUT', '/api/settings/grading', { token: tok, body: { grade_scale_max: 10 } });
+        assert.equal(blocked.status, 409, blocked.text);
+        assert.equal((await api('GET', '/api/settings/grading', { token: tok })).json.data.grade_scale_max, 20);
+      });
+
+      it('le bulletin lit le barème de l’établissement et normalise les mentions sur 20', async () => {
+        await pool.query('UPDATE tenants SET grade_scale_max = 10 WHERE id = $1', [tid]);
+        const { loadReportCard } = require('../../backend/src/utils/studentData.js');
+        const d = await loadReportCard(tid, stu, {});
+        assert.equal(d.grade_scale_max, 10);
+        await pool.query('UPDATE tenants SET grade_scale_max = 20 WHERE id = $1', [tid]);
+      });
+    });
+
+    describe('Logo de l’établissement dans les bulletins (charte PDF)', () => {
+      const zlib = require('node:zlib');
+      const realPng = (w, h) => {
+        const chunk = (type, data) => { const b = Buffer.alloc(12 + data.length); b.writeUInt32BE(data.length, 0); b.write(type, 4, 'latin1'); data.copy(b, 8); return b; };
+        const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 2;
+        const rows = Buffer.alloc(h * (1 + w * 3), 120); for (let y = 0; y < h; y++) rows[y * (1 + w * 3)] = 0;
+        return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(rows)), chunk('IEND', Buffer.alloc(0))]);
+      };
+      const bulletin = async () => { const r = await fetch(`${base}/api/students/${sid}/report-card.pdf`, { headers: { Authorization: `Bearer ${tokens.adminA}` } }); return { status: r.status, txt: Buffer.from(await r.arrayBuffer()).toString('latin1') }; };
+      let sid;
+      before(async () => { sid = (await api('POST', '/api/students', { token: tokens.adminA, body: { matricule: 'LOGO-1', first_name: 'Logo', last_name: 'Eleve' } })).json.data.id; });
+
+      it('sans logo : bulletin généré, sans image', async () => {
+        const r = await bulletin();
+        assert.equal(r.status, 200); assert.ok(!r.txt.includes('/Subtype /Image'));
+      });
+
+      it('logo PNG valide : bulletin avec image intégrée', async () => {
+        assert.equal((await api('PUT', '/api/settings/identity/logo', { token: tokens.adminA, raw: realPng(128, 128), headers: { 'Content-Type': 'image/png' } })).status, 200);
+        const r = await bulletin();
+        assert.equal(r.status, 200); assert.ok(r.txt.includes('/Subtype /Image'));
+      });
+
+      it('logo illisible en base : bulletin tout de même généré, sans image', async () => {
+        await pool.query("UPDATE tenant_identity SET logo = $2 WHERE tenant_id = $1", [TA, Buffer.from('données corrompues sans signature')]);
+        const r = await bulletin();
+        assert.equal(r.status, 200); assert.ok(!r.txt.includes('/Subtype /Image'));
+      });
+
+      it('suppression du logo : retour au bulletin sans image', async () => {
+        assert.equal((await api('PUT', '/api/settings/identity/logo', { token: tokens.adminA, raw: realPng(128, 128), headers: { 'Content-Type': 'image/png' } })).status, 200);
+        assert.equal((await api('DELETE', '/api/settings/identity/logo', { token: tokens.adminA })).status, 200);
+        const r = await bulletin();
+        assert.equal(r.status, 200); assert.ok(!r.txt.includes('/Subtype /Image'));
+      });
+    });
+
     describe('Portail parent', () => {
       const mkStudent = async (token, mat, name) => (await api('POST', '/api/students', { token, body: { matricule: mat, first_name: name, last_name: 'Portail' } })).json.data.id;
       let s1; let s2; let s3; let pA; let pB; let tokP1; let tokP2;
@@ -1437,6 +1804,13 @@ if (!TEST_URL) {
         assert.equal((await api('GET', '/api/portal/children/pas-un-uuid', { token: tokP1 })).status, 404);
         const d = await api('GET', `/api/portal/children/${s1}`, { token: tokP1 });
         assert.equal(d.status, 200); assert.equal(d.json.data.student.last_name, 'Portail'); assert.equal(d.json.data.parents, undefined);
+        // Notes : le parent ne voit que les notes validées (une note en saisie n'entre pas encore au bulletin).
+        await api('POST', '/api/grades', { token: tokens.adminA, body: { student_id: s1, subject: 'Brouillon-parent', score: 7, coefficient: 1 } });
+        const vf = await api('POST', '/api/grades', { token: tokens.adminA, body: { student_id: s1, subject: 'Validée-parent', score: 15, coefficient: 1 } });
+        assert.equal((await api('POST', `/api/grades/${vf.json.data.id}/validate`, { token: tokens.adminA })).status, 200);
+        const seen = (await api('GET', `/api/portal/children/${s1}`, { token: tokP1 })).json.data.grades.map((g) => g.subject);
+        assert.ok(seen.includes('Validée-parent'));
+        assert.ok(!seen.includes('Brouillon-parent'), 'une note en saisie ne doit pas apparaître côté parent');
         assert.equal((await api('GET', `/api/portal/children/${s1}/report-card`, { token: tokP1 })).status, 200);
         assert.equal((await api('GET', `/api/portal/children/${s1}/timetable`, { token: tokP1 })).status, 200);
         // un enfant retiré disparaît aussitôt
@@ -1484,7 +1858,7 @@ if (!TEST_URL) {
         assert.equal(ok.status, 200); assert.match(ok.headers.get('content-type'), /application\/pdf/); assert.match(ok.headers.get('content-disposition'), /bulletin-portail-aminata\.pdf/);
         const buf = Buffer.from(await ok.arrayBuffer());
         assert.equal(buf.subarray(0, 5).toString(), '%PDF-'); assert.match(buf.subarray(-6).toString(), /%%EOF/);
-        assert.ok(buf.toString('latin1').includes('Aminata Portail'));
+        assert.ok(pdfText(buf).includes('Aminata Portail'));
         const start = Number(/startxref\n(\d+)/.exec(buf.toString('latin1'))[1]);
         assert.equal(buf.subarray(start, start + 4).toString(), 'xref');
         assert.equal((await api('GET', `/api/students/${s1}/report-card.pdf?from=pas-une-date`, { token: tokens.adminA })).status, 400);
@@ -1509,7 +1883,7 @@ if (!TEST_URL) {
         const ok = await get(`/api/payments/${pay.id}/receipt.pdf`, tokens.adminA);
         assert.equal(ok.status, 200); assert.match(ok.headers.get('content-type'), /application\/pdf/);
         const buf = Buffer.from(await ok.arrayBuffer()).toString('latin1');
-        assert.ok(buf.startsWith('%PDF-')); assert.ok(buf.includes(pay.receipt_number)); assert.ok(buf.includes('Aminata Portail')); assert.ok(buf.includes('Quatre-vingt-cinq mille francs CFA'));
+        assert.ok(buf.startsWith('%PDF-')); const txt = pdfText(Buffer.from(buf, 'latin1')); assert.ok(txt.includes(pay.receipt_number)); assert.ok(txt.includes('Aminata Portail')); assert.ok(txt.includes('Quatre-vingt-cinq mille francs CFA'));
         assert.equal((await get(`/api/payments/${pend.id}/receipt.pdf`, tokens.adminA)).status, 409);
         assert.equal((await get(`/api/payments/${pay.id}/receipt.pdf`, tokens.adminB)).status, 404);
         assert.equal((await get('/api/payments/pas-un-uuid/receipt.pdf', tokens.adminA)).status, 400);
@@ -1547,7 +1921,9 @@ if (!TEST_URL) {
         assert.ok(pay.startsWith('Reçu;Élève;Montant (F CFA);')); assert.match(pay, /R-\d{4}-\d{6}/);
         assert.ok(!(await (await get('/api/payments/export.csv', tokens.adminB)).text()).includes('Portail'));
         // droits : l'enseignant sans droit de lecture « Paiements » reçoit 403 ; le parent est fermé
-        assert.equal((await get('/api/payments/export.csv', tokens.teacherA)).status, 200); // lecture seule par défaut
+        assert.equal((await get('/api/payments/export.csv', tokens.teacherA)).status, 403); // D1 : aucun accès par défaut
+        await api('PUT', '/api/settings/permissions', { token: tokens.adminA, body: { changes: [{ role: 'teacher', module: 'payments', level: 'read' }] } });
+        assert.equal((await get('/api/payments/export.csv', tokens.teacherA)).status, 200); // ouverture par l'administrateur
         await api('PUT', '/api/settings/permissions', { token: tokens.adminA, body: { changes: [{ role: 'teacher', module: 'payments', level: 'none' }] } });
         assert.equal((await get('/api/payments/export.csv', tokens.teacherA)).status, 403);
         await api('DELETE', '/api/settings/permissions', { token: tokens.adminA });

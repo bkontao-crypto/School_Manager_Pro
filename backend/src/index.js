@@ -39,6 +39,8 @@ function buildApi() {
   const platformRouter = express.Router();
   platformRouter.use(requireSuperAdmin);
   platformRouter.use('/identity', require('./modules/identity').platformEdit);
+  platformRouter.use(require('./modules/identity').platformTenantIdentity);
+  platformRouter.use(require('./modules/platformBanner'));
   platformRouter.use(require('./modules/platformMail'));
   platformRouter.use(require('./modules/platform'));
   api.use('/platform', platformRouter);

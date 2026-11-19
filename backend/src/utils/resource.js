@@ -27,11 +27,20 @@ function makeResource({
   writeRoles = ['admin'],
   module, // clé de permission du module : si fournie, remplace writeRoles (droits configurables par établissement)
   defaults,
-  create,
+  create, // (req, values) : remplace l'INSERT générique (transactions, participants, etc.) ; doit renvoyer la ligne créée
+  guard, // (req, values) : contrôle métier appelé avant création ; lève une HttpError pour refuser
+  scope, // (req, ph) => clause SQL | null : périmètre de lecture (liste, décompte, export) ; ph(valeur) renvoie un paramètre $n
   afterCreate, // (req, row) : effet de bord non bloquant après création
   exportCsv // { filename, columns: [[clé, en-tête, format?]] } : GET /export.csv (mêmes filtres que la liste), tracé dans le journal d'audit
 }) {
   const router = express.Router();
+
+  // Restriction de périmètre : ajoute la clause paramétrée renvoyée par scope(), le cas échéant.
+  const applyScope = (req, params, where) => {
+    if (!scope) return;
+    const clause = scope(req, (value) => { params.push(value); return `$${params.length}`; });
+    if (clause) where.push(clause);
+  };
 
   if (exportCsv) {
     router.get('/export.csv', wrap(async (req, res) => {
@@ -39,6 +48,7 @@ function makeResource({
       if (errors.length) return invalid(res, errors);
       const where = [`${tenantCol} = $1`]; const params = [req.tenantId];
       for (const [name, value] of Object.entries(f)) { params.push(value); where.push(`${filters[name].column || name} = $${params.length}`); }
+      applyScope(req, params, where);
       const rows = await db.query(`SELECT ${select} FROM ${from} WHERE ${where.join(' AND ')} ORDER BY ${orderBy} LIMIT ${EXPORT_MAX}`, params);
       await audit(req, { action: `${entity}.export`, entity, details: { rows: rows.rows.length } });
       sendCsv(res, exportCsv.filename, exportCsv.columns, rows.rows);
@@ -59,6 +69,7 @@ function makeResource({
       params.push(value);
       where.push(`${filters[name].column || name} = $${params.length}`);
     }
+    applyScope(req, params, where);
     const clause = where.join(' AND ');
     const [rows, count] = await Promise.all([
       db.query(`SELECT ${select} FROM ${from} WHERE ${clause} ORDER BY ${orderBy} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
@@ -73,6 +84,7 @@ function makeResource({
     const { values, errors } = validate(req.body, fields);
     if (errors.length) return invalid(res, errors);
     const all = { ...values, ...(defaults ? defaults(req) : {}) };
+    if (guard) await guard(req, all); // contrôle métier avant écriture (ex. période clôturée)
 
     let row;
     if (create) {

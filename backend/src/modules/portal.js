@@ -45,7 +45,7 @@ router.get('/children', wrap(async (req, res) => {
 // Dossier sans les coordonnées des autres responsables ni l'adresse d'urgence d'autrui.
 router.get('/children/:id', wrap(async (req, res) => {
   const id = await ownChild(req);
-  const data = await loadProfile(req.tenantId, id, { withParents: false });
+  const data = await loadProfile(req.tenantId, id, { withParents: false, validatedGradesOnly: true });
   if (!data) throw new HttpError(404, 'Enfant introuvable.');
   delete data.parents;
   res.json({ data });

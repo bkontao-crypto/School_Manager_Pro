@@ -19,7 +19,7 @@ const store = {
 };
 const session = { token: store.get('smp.token'), tenantId: store.get('smp.tenantId'), user: null };
 
-const ROLE_LABELS = { superadmin: 'Super administrateur', admin: 'Administrateur', teacher: 'Enseignant', accountant: 'Comptable', staff: 'Personnel', parent: 'Parent', user: 'Utilisateur' };
+const ROLE_LABELS = { superadmin: 'Super administrateur', admin: 'Administrateur', gerant: 'Gérant', teacher: 'Enseignant', accountant: 'Comptable', staff: 'Personnel', parent: 'Parent', user: 'Utilisateur' };
 // Niveau d'accès au module (none / read / write) pour l'utilisateur connecté ; l'administrateur a tout.
 const permOf = (key) => (session.user && ['admin', 'superadmin'].includes(session.user.role) ? 'write' : ((session.user && session.user.permissions) || {})[key] || 'none');
 const STATUS_LABELS = {
@@ -384,22 +384,30 @@ function bannerSectionHtml() {
   </section>`;
 }
 
-async function setupBannerSection() {
+// Affiche d'un établissement, éditée par le superadmin. base = /api/platform/tenants/:id/banner
+async function setupBannerSection(base) {
   const prev = $('banner-prev-img');
-  let meta = (await get('/api/settings/banner')).data;
+  let meta = (await get(base)).data;
   const req = meta.requirements;
-  let pending = null;
+  let pending = null; let previewUrl = null;
   const showErrors = (list) => { const box = $('banner-errors'); box.classList.toggle('hidden', !list.length); box.innerHTML = list.length ? `<strong>Image refusée :</strong><ul class="list-disc pl-5 mt-1">${list.map((e) => `<li>${escapeHtml(e)}</li>`).join('')}</ul>` : ''; };
   $('banner-reqs').innerHTML = [
     `Format : ${req.ratio}:1 (ex. 1600×400 px)`, `Tolérance : ±${Math.round(req.ratioTolerance * 100)} % sur les proportions`,
     `Taille minimale : ${req.minWidth}×${req.minHeight} px`, `Taille maximale : ${req.maxWidth}×${req.maxHeight} px`,
     'Types : PNG, JPEG ou WebP', `Poids maximal : ${req.maxBytes / 1048576} Mo`].map((t) => `<li>${t}</li>`).join('');
-  const refresh = () => {
-    prev.src = meta.custom ? $('hero-banner-img').src : HERO_DEFAULT.src;
+  const paintPreview = async () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = null;
+    if (meta.custom) { const res = await fetch(`${base}/image`, { headers: authHeaders() }); if (res.ok) previewUrl = URL.createObjectURL(await res.blob()); }
+    prev.src = previewUrl || HERO_DEFAULT.src;
+  };
+  const refresh = async () => {
+    await paintPreview();
     $('banner-title').value = meta.title || ''; $('banner-subtitle').value = meta.subtitle || '';
     $('banner-reset').classList.toggle('hidden', !meta.custom && !meta.title && !meta.subtitle);
   };
-  await loadBanner(); refresh();
+  const reload = async () => { if (!base.includes('/api/platform/tenants/')) await loadBanner(); meta = (await get(base)).data; await refresh(); };
+  await refresh();
   $('banner-pick').addEventListener('click', () => $('banner-file').click());
   $('banner-file').addEventListener('change', async () => {
     const file = $('banner-file').files[0];
@@ -415,19 +423,19 @@ async function setupBannerSection() {
     if (!pending) return;
     $('banner-send').disabled = true;
     try {
-      const res = await fetch('/api/settings/banner/image', { method: 'PUT', headers: { ...authHeaders(), 'Content-Type': pending.type }, body: pending });
+      const res = await fetch(`${base}/image`, { method: 'PUT', headers: { ...authHeaders(), 'Content-Type': pending.type }, body: pending });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { showErrors(Array.isArray(data.errors) && data.errors.length ? data.errors : [data.error || `Erreur HTTP ${res.status}`]); return; }
       pending = null; $('banner-file').value = ''; $('banner-send').classList.add('hidden');
-      meta = await loadBanner() || meta; refresh(); toast('Affiche d’accueil publiée.');
+      await reload(); toast('Affiche d’accueil publiée.');
     } catch (e) { showErrors(['Serveur injoignable. Vérifiez votre connexion.']); } finally { $('banner-send').disabled = false; }
   });
   $('banner-text-save').addEventListener('click', async () => {
-    try { await api('PUT', '/api/settings/banner/text', { title: $('banner-title').value.trim(), subtitle: $('banner-subtitle').value.trim() }); meta = await loadBanner() || meta; refresh(); toast('Textes enregistrés.'); } catch (e) { toast(e.message, 'err'); }
+    try { await api('PUT', `${base}/text`, { title: $('banner-title').value.trim(), subtitle: $('banner-subtitle').value.trim() }); await reload(); toast('Textes enregistrés.'); } catch (e) { toast(e.message, 'err'); }
   });
   $('banner-reset').addEventListener('click', async () => {
     if (!(await confirmDialog('Affiche par défaut', 'L’affiche personnalisée et les textes seront supprimés.'))) return;
-    try { await api('DELETE', '/api/settings/banner'); meta = await loadBanner() || meta; refresh(); showErrors([]); toast('Affiche par défaut rétablie.'); } catch (e) { toast(e.message, 'err'); }
+    try { await api('DELETE', base); await reload(); showErrors([]); toast('Affiche par défaut rétablie.'); } catch (e) { toast(e.message, 'err'); }
   });
 }
 
@@ -485,7 +493,7 @@ const MODULES = {
     fields: [{ name: 'name', label: 'Nom de la classe', required: true }, { name: 'level', label: 'Niveau' }, { name: 'school_year', label: 'Année scolaire (ex. 2026-2027)' }, { name: 'max_students', label: 'Effectif maximum', type: 'number' }],
     columns: [['name', 'Classe'], ['level', 'Niveau'], ['school_year', 'Année scolaire'], ['max_students', 'Effectif max.']] },
   grades: { title: 'Notes', endpoint: '/api/grades', writeRoles: ['admin', 'teacher'],
-    fields: [{ name: 'student_id', label: 'Élève', type: 'student', required: true }, { name: 'subject', label: 'Matière', required: true }, { name: 'score', label: 'Note (sur 20)', type: 'number', required: true }, { name: 'evaluation_type', label: 'Type d’évaluation (devoir, composition…)' }, { name: 'coefficient', label: 'Coefficient', type: 'number' }],
+    fields: [{ name: 'student_id', label: 'Élève', type: 'student', required: true }, { name: 'subject', label: 'Matière', required: true }, { name: 'score', label: 'Note', type: 'number', required: true }, { name: 'evaluation_type', label: 'Type d’évaluation (devoir, composition…)' }, { name: 'coefficient', label: 'Coefficient', type: 'number' }],
     columns: [['student_name', 'Élève'], ['subject', 'Matière'], ['evaluation_type', 'Évaluation'], ['score', 'Note'], ['status', 'Statut', label]] },
   attendances: { title: 'Présences', endpoint: '/api/attendances', writeRoles: ['admin', 'teacher'],
     fields: [{ name: 'student_id', label: 'Élève', type: 'student', required: true }, { name: 'class_id', label: 'Classe', type: 'class', clearable: true }, { name: 'date', label: 'Date', type: 'date', required: true },
@@ -513,8 +521,8 @@ const MODULES = {
     columns: [['last_name', 'Nom'], ['first_name', 'Prénom'], ['position', 'Fonction'], ['department', 'Service'], ['hire_date', 'Embauche', displayDate], ['status', 'Statut', label]] },
   documents: { title: 'Documents', endpoint: '/api/documents', writeRoles: ['admin', 'teacher'],
     fields: [{ name: 'title', label: 'Titre', required: true }, { name: 'type', label: 'Type (cours, circulaire, bulletin…)' }, { name: 'class_id', label: 'Classe concernée', type: 'class', clearable: true },
-      { name: 'file_path', label: 'Référence ou emplacement du fichier' }, { name: 'status', label: 'Statut', type: 'select', options: [['brouillon', 'Brouillon'], ['publie', 'Publié'], ['archive', 'Archivé']] }],
-    columns: [['title', 'Titre'], ['type', 'Type'], ['file_path', 'Fichier'], ['status', 'Statut', (v) => ({ brouillon: 'Brouillon', publie: 'Publié', archive: 'Archivé' }[v] || v)], ['created_at', 'Création', displayDate]] },
+      { name: 'status', label: 'Statut', type: 'select', options: [['brouillon', 'Brouillon'], ['publie', 'Publié'], ['archive', 'Archivé']] }],
+    columns: [['title', 'Titre'], ['type', 'Type'], ['original_name', 'Fichier', (v) => v || 'Aucun fichier joint'], ['status', 'Statut', (v) => ({ brouillon: 'Brouillon', publie: 'Publié', archive: 'Archivé' }[v] || v)], ['created_at', 'Création', displayDate]] },
   stocks: { title: 'Stocks', endpoint: '/api/stocks', writeRoles: ADMIN,
     fields: [{ name: 'name', label: 'Article', required: true }, { name: 'category', label: 'Catégorie' }, { name: 'quantity', label: 'Quantité', type: 'number' }, { name: 'unit', label: 'Unité (boîte, ramette…)' }, { name: 'threshold', label: 'Seuil d’alerte', type: 'number' }],
     columns: [['name', 'Article'], ['category', 'Catégorie'], ['quantity', 'Quantité', fmtNumber], ['unit', 'Unité'], ['threshold', 'Seuil', fmtNumber], ['status', 'Statut', label]] },
@@ -526,6 +534,9 @@ const canWrite = (key) => permOf(key) === 'write';
 
 const PAGE = 20;
 const listState = { key: null, offset: 0, q: '' };
+
+// Barème de l'établissement (10 ou 20), chargé à l'ouverture du module notes.
+let gradeScaleMax = 20;
 
 async function openModule(key, opts = {}) {
   const cfg = MODULES[key];
@@ -542,17 +553,22 @@ async function openModule(key, opts = {}) {
   const EXPORTABLE = { students: 'eleves.csv', grades: 'notes.csv', payments: 'paiements.csv' };
   if (listState.key !== key) { listState.key = key; listState.offset = 0; listState.q = ''; }
   const writable = canWrite(key);
+  if (key === 'grades') {
+    try { gradeScaleMax = (await get('/api/settings/grading')).data.grade_scale_max; } catch (e) { gradeScaleMax = 20; }
+    const scoreField = cfg.fields.find((f) => f.name === 'score');
+    if (scoreField) scoreField.label = `Note (sur ${gradeScaleMax})`;
+  }
   moduleView.innerHTML = `<div class="flex flex-wrap items-center justify-between gap-3"><div><p class="text-sm text-slate-500">Gestion scolaire</p><h2 class="text-2xl font-bold text-slate-900">${cfg.title}</h2></div>
     <div class="flex flex-wrap gap-2">${cfg.search ? '<input id="module-q" type="search" placeholder="Nom ou matricule…" class="w-full sm:w-auto rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" aria-label="Filtrer la liste">' : ''}
     <button id="module-refresh" class="px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 text-sm font-semibold"><i class="fa-solid fa-rotate mr-2"></i>Actualiser</button>
     ${cfg.endpoint && EXPORTABLE[key] ? '<button id="module-export" class="px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 text-sm font-semibold"><i class="fa-solid fa-file-excel mr-2"></i>Exporter</button>' : ''}
     ${writable ? '<button id="module-add" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-2"></i>Ajouter</button>' : ''}</div></div>
     <section class="bg-white rounded-2xl border border-slate-200 p-5"><div class="flex justify-between items-center mb-4"><h3 class="font-bold">Liste</h3><span id="module-count" class="text-xs text-slate-500">Chargement…</span></div>
-    <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-xs text-slate-500 border-b">${cfg.columns.map((c) => `<th class="py-3 pr-4">${c[1]}</th>`).join('')}${key === 'students' && writable ? '<th class="py-3 pr-2">Actions</th>' : key === 'students' ? '<th class="py-3 pr-2">Dossier</th>' : key === 'payments' ? '<th class="py-3 pr-2">PDF</th>' : ''}</tr></thead>
+    <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-xs text-slate-500 border-b">${cfg.columns.map((c) => `<th class="py-3 pr-4">${c[1]}</th>`).join('')}${key === 'students' && writable ? '<th class="py-3 pr-2">Actions</th>' : key === 'students' ? '<th class="py-3 pr-2">Dossier</th>' : key === 'payments' ? '<th class="py-3 pr-2">PDF</th>' : key === 'documents' ? '<th class="py-3 pr-2">Action</th>' : key === 'grades' ? '<th class="py-3 pr-2">Actions</th>' : ''}</tr></thead>
     <tbody id="module-rows"></tbody></table></div>
     <div class="flex items-center justify-between mt-4"><button id="page-prev" class="text-sm text-blue-600 disabled:text-slate-300">← Précédent</button><span id="page-info" class="text-xs text-slate-500"></span><button id="page-next" class="text-sm text-blue-600 disabled:text-slate-300">Suivant →</button></div>
     <p id="module-error" class="text-sm text-red-600 mt-3" role="alert"></p></section>`;
-  const colSpan = cfg.columns.length + (key === 'students' || key === 'payments' ? 1 : 0);
+  const colSpan = cfg.columns.length + (key === 'students' || key === 'payments' || key === 'grades' || key === 'documents' ? 1 : 0);
 
   async function refresh() {
     const tbody = $('module-rows'), count = $('module-count'), err = $('module-error');
@@ -565,14 +581,62 @@ async function openModule(key, opts = {}) {
       $('page-info').textContent = total ? `${listState.offset + 1}–${listState.offset + data.length} sur ${fmtNumber(total)}` : '';
       $('page-prev').disabled = listState.offset === 0;
       $('page-next').disabled = listState.offset + data.length >= total;
+      const myPending = key === 'grades' ? Object.fromEntries(rows(await get('/api/grades/corrections/mine')).map((c) => [c.grade_id, c.id])) : {};
       tbody.innerHTML = data.length ? data.map((item) => `<tr class="border-b border-slate-100 hover:bg-slate-50">${cfg.columns.map(([k, , fmt]) => `<td class="py-3 pr-4 text-slate-700">${renderCell(item[k], fmt)}</td>`).join('')}${key === 'students'
-        ? `<td class="py-3 pr-2 whitespace-nowrap"><button type="button" data-act="profile" data-id="${escapeHtml(item.id)}" class="text-emerald-700 hover:underline mr-3">Dossier</button>${writable ? `<button type="button" data-act="edit" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline mr-3">Modifier</button><button type="button" data-act="delete" data-id="${escapeHtml(item.id)}" class="text-red-600 hover:underline">Supprimer</button>` : ''}</td>` : key === 'payments' ? `<td class="py-3 pr-2">${item.status === 'paye' ? `<button type="button" data-act="receipt" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline"><i class="fa-solid fa-file-pdf mr-1"></i>Reçu</button>` : ''}</td>` : ''}</tr>`).join('')
+        ? `<td class="py-3 pr-2 whitespace-nowrap"><button type="button" data-act="profile" data-id="${escapeHtml(item.id)}" class="text-emerald-700 hover:underline mr-3">Dossier</button>${writable ? `<button type="button" data-act="edit" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline mr-3">Modifier</button><button type="button" data-act="delete" data-id="${escapeHtml(item.id)}" class="text-red-600 hover:underline">Supprimer</button>` : ''}</td>` : key === 'payments' ? `<td class="py-3 pr-2">${item.status === 'paye' ? `<button type="button" data-act="receipt" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline"><i class="fa-solid fa-file-pdf mr-1"></i>Reçu</button>` : ''}</td>` : key === 'documents' ? `<td class="py-3 pr-2 whitespace-nowrap">${item.original_name ? `<button type="button" data-act="download" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline mr-3">Télécharger</button>` : ''}${writable && !item.original_name ? `<button type="button" data-act="upload" data-id="${escapeHtml(item.id)}" class="text-emerald-700 hover:underline">Joindre un fichier</button>` : ''}</td>` : key === 'grades' ? `<td class="py-3 pr-2 whitespace-nowrap">${item.status === 'saisie' && session.user.role === 'admin' ? `<button type="button" data-act="validate" data-id="${escapeHtml(item.id)}" class="text-emerald-700 hover:underline mr-3">Valider</button><button type="button" data-act="cancel" data-id="${escapeHtml(item.id)}" class="text-red-600 hover:underline">Annuler</button>` : ''}${item.status === 'validee' && writable ? (myPending[item.id] ? `<button type="button" data-act="withdraw" data-id="${escapeHtml(item.id)}" data-cid="${escapeHtml(myPending[item.id])}" class="text-slate-600 hover:underline">Retirer ma demande</button>` : `<button type="button" data-act="correct" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline">Corriger</button>`) : ''}</td>` : ''}</tr>`).join('')
         : `<tr><td colspan="${colSpan}" class="py-8 text-center text-slate-400">Aucun enregistrement.</td></tr>`;
       if (key === 'payments') {
         tbody.onclick = async (ev) => {
           const btn = ev.target.closest('button[data-act=receipt]'); if (!btn) return;
           const item = data.find((x) => x.id === btn.dataset.id); if (!item) return;
           try { await downloadFile(`/api/payments/${encodeURIComponent(item.id)}/receipt.pdf`, `recu-${item.receipt_number || 'paiement'}.pdf`); } catch (e) { toast(e.message, 'err'); }
+        };
+      }
+      if (key === 'documents') {
+        tbody.onclick = async (ev) => {
+          const btn = ev.target.closest('button[data-act]'); if (!btn) return;
+          const item = data.find((x) => x.id === btn.dataset.id); if (!item) return;
+          if (btn.dataset.act === 'download') {
+            try { await downloadFile(`/api/documents/${encodeURIComponent(item.id)}/file`, item.original_name || 'document'); } catch (e) { toast(e.message, 'err'); }
+            return;
+          }
+          const input = document.createElement('input'); input.type = 'file'; input.accept = '.pdf,.png,.jpg,.jpeg';
+          input.onchange = async () => {
+            const f = input.files[0]; if (!f) return;
+            const fd = new FormData(); fd.append('file', f);
+            try {
+              const res = await fetch(`/api/documents/${encodeURIComponent(item.id)}/file`, { method: 'POST', headers: authHeaders(), body: fd });
+              const d = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(d.error || `Erreur ${res.status}`);
+              toast('Fichier joint.'); refresh();
+            } catch (e) { toast(e.message, 'err'); }
+          };
+          input.click();
+        };
+      }
+      if (key === 'grades') {
+        tbody.onclick = async (ev) => {
+          const btn = ev.target.closest('button[data-act]'); if (!btn) return;
+          const item = data.find((x) => x.id === btn.dataset.id); if (!item) return;
+          try {
+            if (btn.dataset.act === 'withdraw') {
+              const done = await formModal({ title: 'Retirer ma demande de correction', fields: [{ name: 'reason', label: 'Motif (obligatoire)', required: true }], submit: 'Retirer', onSubmit: (v) => api('POST', `/api/grades/corrections/${encodeURIComponent(btn.dataset.cid)}/withdraw`, v) });
+              if (done) { toast('Demande retirée.'); refresh(); }
+              return;
+            }
+            if (btn.dataset.act === 'correct') {
+              const sent = await formModal({ title: 'Demande de correction', fields: [{ name: 'score', label: `Nouvelle note (sur ${gradeScaleMax})`, type: 'number', required: true }, { name: 'reason', label: 'Motif (obligatoire)', required: true }], submit: 'Envoyer la demande', onSubmit: (v) => api('POST', `/api/grades/${encodeURIComponent(item.id)}/corrections`, v) });
+              if (sent) { toast('Demande envoyée à l’administrateur.'); refresh(); }
+              return;
+            }
+            if (btn.dataset.act === 'cancel') {
+              if (!await confirmDialog('Annuler la note', 'La note ne comptera plus dans les bulletins.')) return;
+              await api('POST', `/api/grades/${encodeURIComponent(item.id)}/cancel`);
+            } else {
+              await api('POST', `/api/grades/${encodeURIComponent(item.id)}/validate`);
+            }
+            toast('Note mise à jour.'); refresh();
+          } catch (e) { toast(e.message, 'err'); }
         };
       }
       if (key === 'students') {
@@ -630,15 +694,25 @@ async function openMessages(opts = {}) {
         : '<p class="p-3 text-slate-400">Aucune conversation. Créez la première.</p>';
     } catch (e) { $('conv-list').innerHTML = `<p class="p-3 text-red-500">${escapeHtml(e.message)}</p>`; }
   }
+  // Accusés (ordonnance §4.1) : compteurs seulement, jamais l'identité des lecteurs.
+  function receiptLabel(m) {
+    if (!m.recipients_count) return 'Envoyé';
+    return m.read_count >= m.recipients_count ? 'Lu par tous' : `Lu par ${m.read_count} sur ${m.recipients_count}`;
+  }
   async function loadThread() {
     if (!msgState.conversationId) return;
     try {
       const list = rows(await get(`/api/messages/messages?conversation_id=${encodeURIComponent(msgState.conversationId)}&limit=100`)).reverse();
       $('thread').innerHTML = list.length ? list.map((m) => {
         const mine = session.user && m.sender_id === session.user.id;
-        return `<div class="flex ${mine ? 'justify-end' : 'justify-start'}"><div class="max-w-[80%] rounded-2xl px-3.5 py-2 ${mine ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-800'}"><p class="text-[11px] ${mine ? 'text-blue-100' : 'text-slate-500'}">${escapeHtml(m.sender_name || 'Utilisateur')} · ${new Date(m.sent_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</p><p class="whitespace-pre-wrap break-words">${escapeHtml(m.content)}</p></div></div>`;
+        return `<div class="flex ${mine ? 'justify-end' : 'justify-start'}"><div class="max-w-[80%] rounded-2xl px-3.5 py-2 ${mine ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-800'}"><p class="text-[11px] ${mine ? 'text-blue-100' : 'text-slate-500'}">${escapeHtml(m.sender_name || 'Utilisateur')} · ${new Date(m.sent_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</p><p class="whitespace-pre-wrap break-words">${escapeHtml(m.content)}</p>${mine ? `<p class="text-[11px] text-blue-100 mt-1">${receiptLabel(m)}</p>` : ''}</div></div>`;
       }).join('') : '<p class="text-slate-400">Aucun message. Écrivez le premier.</p>';
       $('thread').scrollTop = $('thread').scrollHeight;
+      // Le destinataire accuse réception puis lecture de la conversation affichée (échecs silencieux : pas de droit = pas d'accusé).
+      if (list.some((m) => m.sender_id !== (session.user && session.user.id))) {
+        const base = `/api/messages/conversations/${encodeURIComponent(msgState.conversationId)}`;
+        api('POST', `${base}/receive`).then(() => api('POST', `${base}/read`)).catch(() => {});
+      }
     } catch (e) { $('thread').innerHTML = `<p class="text-red-500">${escapeHtml(e.message)}</p>`; }
   }
   async function select(id, title) {
@@ -749,7 +823,7 @@ async function openReports() {
       ${reportTable('Élèves par classe', ['Classe', 'Effectif'], d.students_by_class, (x) => `<tr class="border-b"><td class="py-2 pr-3">${escapeHtml(x.label)}</td><td class="py-2">${fmtNumber(x.total)}</td></tr>`)}
       ${reportTable('Encaissements par type de frais', ['Frais', 'Paiements', 'Montant'], d.payments_by_fee, (x) => `<tr class="border-b"><td class="py-2 pr-3">${escapeHtml(x.label)}</td><td class="py-2 pr-3">${fmtNumber(x.count)}</td><td class="py-2">${money(x.total)}</td></tr>`)}
       ${reportTable('Présences — 30 derniers jours', ['Statut', 'Nombre'], d.attendance_30d, (x) => `<tr class="border-b"><td class="py-2 pr-3">${escapeHtml(label(x.label))}</td><td class="py-2">${fmtNumber(x.total)}</td></tr>`)}
-      ${reportTable('Moyennes par matière (sur 20)', ['Matière', 'Moyenne', 'Notes'], d.grades_by_subject, (x) => `<tr class="border-b"><td class="py-2 pr-3">${escapeHtml(x.label)}</td><td class="py-2 pr-3 font-semibold">${String(x.average).replace('.', ',')}</td><td class="py-2">${fmtNumber(x.count)}</td></tr>`)}</div>`;
+      ${reportTable(`Moyennes par matière (sur ${d.grade_scale_max || 20})`, ['Matière', 'Moyenne', 'Notes'], d.grades_by_subject, (x) => `<tr class="border-b"><td class="py-2 pr-3">${escapeHtml(x.label)}</td><td class="py-2 pr-3 font-semibold">${String(x.average).replace('.', ',')}</td><td class="py-2">${fmtNumber(x.count)}</td></tr>`)}</div>`;
     $('rep-print').addEventListener('click', () => window.print());
     $('rep-csv').addEventListener('click', async () => {
       const q = new URLSearchParams(); if ($('rep-from').value) q.set('from', $('rep-from').value); if ($('rep-to').value) q.set('to', $('rep-to').value);
@@ -794,8 +868,13 @@ async function setupPermissions() {
 }
 
 // ---------------------------------------------------------------- Paramètres
+function gradingSectionHtml() {
+  return `<section class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-2">Barème des notes</h3><p class="text-sm text-slate-500 mb-3">Barème de l’établissement. Les mentions des bulletins restent définies sur 20. Le changement est refusé tant qu’une note dépasse le nouveau barème.</p><div class="flex flex-wrap items-center gap-2"><select id="grading-scale" class="rounded-lg border border-slate-200 px-3 py-2 text-sm"><option value="20">Sur 20</option><option value="10">Sur 10</option></select><button id="grading-save" type="button" class="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white">Enregistrer</button></div></section>`;
+}
+
 async function openSettings() {
   const isAdmin = session.user && ['admin', 'superadmin'].includes(session.user.role);
+  const canReopen = isAdmin || session.user.role === 'gerant';
   moduleView.innerHTML = '<p class="p-6 text-slate-500">Chargement…</p>';
   let tenant = null;
   try { tenant = (await get('/api/settings')).data; } catch (e) { moduleView.innerHTML = `<p class="p-6 text-red-600">${escapeHtml(e.message)}</p>`; return; }
@@ -803,8 +882,10 @@ async function openSettings() {
     <section class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-3">Établissement</h3><p class="text-sm text-slate-500">Code de connexion : <strong class="text-slate-800">${escapeHtml(tenant.code)}</strong> · Statut : ${escapeHtml(tenant.status || '—')}</p>
       <p class="mt-2 text-sm">Nom : <strong id="tenant-name">${escapeHtml(tenant.name)}</strong> ${isAdmin ? '<button id="tenant-edit" class="ml-2 text-blue-600 hover:underline text-sm">Modifier</button>' : ''}</p></section>
     <section class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-3">Mon compte</h3><p class="text-sm text-slate-500">${escapeHtml(session.user.email)} · ${escapeHtml(ROLE_LABELS[session.user.role] || session.user.role)}</p><button id="pwd-btn" class="mt-3 px-4 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700">Changer mon mot de passe</button></section>
+    ${isAdmin ? gradingSectionHtml() : ''}
     ${isAdmin ? bannerSectionHtml() + identitySectionHtml(false) + subscriptionSectionHtml() + permissionsSectionHtml() : ''}
-    ${isAdmin ? `<section class="bg-white rounded-2xl border border-slate-200 p-5"><div class="flex items-center justify-between mb-3"><h3 class="font-bold">Périodes scolaires (trimestres)</h3><button id="period-add" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-2"></i>Ajouter</button></div><div id="periods-list" class="text-sm space-y-2"></div><p class="mt-3 text-xs text-slate-400">Les périodes servent à filtrer les bulletins.</p></section>
+    ${canReopen ? `<section class="bg-white rounded-2xl border border-slate-200 p-5"><div class="flex items-center justify-between mb-3"><h3 class="font-bold">Périodes scolaires (trimestres)</h3>${isAdmin ? `<button id="period-add" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-2"></i>Ajouter</button>` : ''}</div><div id="periods-list" class="text-sm space-y-2"></div><p class="mt-3 text-xs text-slate-400">Les périodes servent à filtrer les bulletins.</p></section>
+    ${isAdmin ? `<section id="corrections-card" class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-3">Corrections de notes en attente</h3><div id="corrections-list" class="text-sm"></div></section>` : ''}
     <section class="bg-white rounded-2xl border border-slate-200 p-5"><div class="flex items-center justify-between mb-3"><h3 class="font-bold">Utilisateurs</h3><button id="user-add" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-2"></i>Ajouter</button></div>
       <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-xs text-slate-500 border-b"><th class="py-2 pr-3">Nom</th><th class="py-2 pr-3">E-mail</th><th class="py-2 pr-3">Rôle</th><th class="py-2 pr-3">Dernière connexion</th><th class="py-2 pr-3">Statut</th><th class="py-2"></th></tr></thead><tbody id="users-rows"></tbody></table></div>
       <p class="mt-3 text-xs text-slate-400">Un compte désactivé est déconnecté immédiatement. Un changement de rôle s’applique dès la requête suivante.</p></section>` : ''}`;
@@ -812,8 +893,9 @@ async function openSettings() {
     const ok = await formModal({ title: 'Changer mon mot de passe', fields: [{ name: 'current_password', label: 'Mot de passe actuel', type: 'password', required: true }, { name: 'new_password', label: 'Nouveau mot de passe (8 caractères minimum)', type: 'password', required: true }], onSubmit: (v) => api('POST', '/api/auth/password', v) });
     if (ok) toast('Mot de passe modifié.');
   });
-  if (!isAdmin) return;
-  setupBannerSection().catch((e) => toast(e.message, 'err'));
+  if (!canReopen) return;
+  if (isAdmin) {
+  setupBannerSection('/api/settings/banner').catch((e) => toast(e.message, 'err'));
   setupIdentitySection('/api/settings/identity').catch((e) => toast(e.message, 'err'));
   setupSubscription().catch((e) => toast(e.message, 'err'));
   setupPermissions().catch((e) => toast(e.message, 'err'));
@@ -821,17 +903,55 @@ async function openSettings() {
     const ok = await formModal({ title: 'Nom de l’établissement', values: { name: tenant.name }, fields: [{ name: 'name', label: 'Nom', required: true }], onSubmit: async (v) => { tenant = (await api('PUT', '/api/settings', v)).data; } });
     if (ok) { $('tenant-name').textContent = tenant.name; toast('Établissement mis à jour.'); }
   });
+  }
+  async function loadCorrections() {
+    const box = $('corrections-list');
+    if (!box) return;
+    try {
+      const list = rows(await get('/api/grades/corrections'));
+      box.innerHTML = list.length ? list.map((c) => `<div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2"><span><strong>${escapeHtml(c.student_name)}</strong> · ${escapeHtml(c.subject)} : ${escapeHtml(String(c.old_score))} → <strong>${escapeHtml(String(c.new_score))}</strong> <span class="text-slate-500">par ${escapeHtml(c.requested_by_name)} — « ${escapeHtml(c.reason)} »</span></span><span class="flex gap-3">${c.requested_by === session.user.id ? `<button type="button" data-correction-withdraw="${escapeHtml(c.id)}" class="text-slate-600 hover:underline">Retirer ma demande</button>` : `<button type="button" data-correction-approve="${escapeHtml(c.id)}" class="text-emerald-700 hover:underline">Approuver</button><button type="button" data-correction-reject="${escapeHtml(c.id)}" class="text-red-600 hover:underline">Refuser</button>`}</span></div>`).join('') : '<p class="text-slate-400">Aucune demande en attente.</p>';
+    } catch (e) { box.innerHTML = `<p class="text-red-500">${escapeHtml(e.message)}</p>`; }
+  }
+  if ($('corrections-list')) $('corrections-list').addEventListener('click', async (ev) => {
+    const ap = ev.target.closest('[data-correction-approve]');
+    const rj = ev.target.closest('[data-correction-reject]');
+    const wd = ev.target.closest('[data-correction-withdraw]');
+    if (wd) {
+      const done = await formModal({ title: 'Retirer ma demande de correction', fields: [{ name: 'reason', label: 'Motif (obligatoire)', required: true }], submit: 'Retirer', onSubmit: (v) => api('POST', `/api/grades/corrections/${encodeURIComponent(wd.dataset.correctionWithdraw)}/withdraw`, v) });
+      if (done) { toast('Demande retirée.'); loadCorrections(); }
+      return;
+    }
+    const b = ap || rj; if (!b) return;
+    const decision = ap ? 'approve' : 'reject';
+    const id = ap ? ap.dataset.correctionApprove : rj.dataset.correctionReject;
+    const ok = await formModal({ title: ap ? 'Approuver la correction' : 'Refuser la correction', fields: [{ name: 'reason', label: 'Motif (obligatoire)', required: true }], submit: ap ? 'Approuver' : 'Refuser', onSubmit: (v) => api('POST', `/api/grades/corrections/${encodeURIComponent(id)}/${decision}`, v) });
+    if (ok) { toast(ap ? 'Correction approuvée.' : 'Correction refusée.'); loadCorrections(); }
+  });
+  loadCorrections();
   async function loadPeriods() {
     const box = $('periods-list');
     try {
       const list = rows(await get('/api/periods?limit=50'));
-      box.innerHTML = list.length ? list.map((p) => `<div class="flex items-center justify-between border-b border-slate-100 pb-2"><span><strong>${escapeHtml(p.name)}</strong> <span class="text-slate-500">du ${displayDate(p.start_date)} au ${displayDate(p.end_date)}</span></span><button type="button" data-period-del="${escapeHtml(p.id)}" class="text-red-600 hover:underline">Supprimer</button></div>`).join('') : '<p class="text-slate-400">Aucune période définie.</p>';
+      box.innerHTML = list.length ? list.map((p) => `<div class="flex items-center justify-between border-b border-slate-100 pb-2"><span><strong>${escapeHtml(p.name)}</strong> <span class="text-slate-500">du ${displayDate(p.start_date)} au ${displayDate(p.end_date)}</span></span><span class="flex items-center gap-3">${p.closed_at ? `<span class="text-xs font-semibold text-amber-700">Clôturée</span>${canReopen ? `<button type="button" data-period-reopen="${escapeHtml(p.id)}" class="text-blue-600 hover:underline">Rouvrir</button>` : ''}` : `${isAdmin ? `<button type="button" data-period-close="${escapeHtml(p.id)}" class="text-blue-600 hover:underline">Clôturer</button><button type="button" data-period-del="${escapeHtml(p.id)}" class="text-red-600 hover:underline">Supprimer</button>` : ''}`}</span></div>`).join('') : '<p class="text-slate-400">Aucune période définie.</p>';
     } catch (e) { box.innerHTML = `<p class="text-red-500">${escapeHtml(e.message)}</p>`; }
   }
-  $('period-add').addEventListener('click', async () => {
+  if ($('period-add')) $('period-add').addEventListener('click', async () => {
     if (await formModal({ title: 'Ajouter une période', fields: [{ name: 'name', label: 'Nom (ex. Trimestre 1)', required: true }, { name: 'start_date', label: 'Début', type: 'date', required: true }, { name: 'end_date', label: 'Fin', type: 'date', required: true }], onSubmit: (v) => api('POST', '/api/periods', v) })) { toast('Période ajoutée.'); loadPeriods(); }
   });
   $('periods-list').addEventListener('click', async (ev) => {
+    const close = ev.target.closest('[data-period-close]');
+    if (close) {
+      if (await confirmDialog('Clôturer la période', 'Les notes dont la date tombe dans cette période ne pourront plus être ajoutées ni validées.')) {
+        try { await api('POST', `/api/periods/${encodeURIComponent(close.dataset.periodClose)}/close`); toast('Période clôturée.'); loadPeriods(); } catch (e) { toast(e.message, 'err'); }
+      }
+      return;
+    }
+    const reopen = ev.target.closest('[data-period-reopen]');
+    if (reopen) {
+      const ok = await formModal({ title: 'Rouvrir la période', fields: [{ name: 'reason', label: 'Motif (obligatoire)', required: true }], submit: 'Rouvrir', onSubmit: (v) => api('POST', `/api/periods/${encodeURIComponent(reopen.dataset.periodReopen)}/reopen`, v) });
+      if (ok) { toast('Période rouverte.'); loadPeriods(); }
+      return;
+    }
     const b = ev.target.closest('[data-period-del]'); if (!b) return;
     if (await confirmDialog('Supprimer la période', 'Les notes ne sont pas affectées ; seul le filtre du bulletin disparaît.')) {
       try { await api('DELETE', `/api/periods/${encodeURIComponent(b.dataset.periodDel)}`); toast('Période supprimée.'); loadPeriods(); } catch (e) { toast(e.message, 'err'); }
@@ -839,7 +959,7 @@ async function openSettings() {
   });
   loadPeriods();
   const USER_FIELDS = [{ name: 'email', label: 'Adresse e-mail', type: 'email', required: true }, { name: 'full_name', label: 'Nom complet', required: true },
-    { name: 'role', label: 'Rôle', type: 'select', required: true, options: [['admin', 'Administrateur'], ['teacher', 'Enseignant'], ['accountant', 'Comptable'], ['user', 'Utilisateur']] },
+    { name: 'role', label: 'Rôle', type: 'select', required: true, options: [['admin', 'Administrateur'], ['gerant', 'Gérant'], ['teacher', 'Enseignant'], ['accountant', 'Comptable'], ['user', 'Utilisateur']] },
     { name: 'password', label: 'Mot de passe initial (8 caractères minimum)', type: 'password', required: true }];
   let users = [];
   async function loadUsers() {
@@ -849,10 +969,21 @@ async function openSettings() {
       tbody.innerHTML = users.map((u) => `<tr class="border-b border-slate-100"><td class="py-2.5 pr-3">${escapeHtml(u.full_name)}</td><td class="py-2.5 pr-3">${escapeHtml(u.email)}</td><td class="py-2.5 pr-3">${escapeHtml(ROLE_LABELS[u.role] || u.role)}</td><td class="py-2.5 pr-3 text-slate-500">${u.last_login_at ? new Date(u.last_login_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : 'Jamais'}</td><td class="py-2.5 pr-3">${u.is_active ? '<span class="text-emerald-700">Actif</span>' : '<span class="text-slate-400">Désactivé</span>'}</td><td class="py-2.5 text-right whitespace-nowrap">${u.id === session.user.id ? '<span class="text-xs text-slate-400">Vous</span>' : `${u.role === 'parent' ? '' : `<button type="button" data-user-role="${escapeHtml(u.id)}" class="text-blue-600 hover:underline mr-3">Rôle</button>`}<button type="button" data-user-pwd="${escapeHtml(u.id)}" class="text-blue-600 hover:underline mr-3">Mot de passe</button><button type="button" data-user-toggle="${escapeHtml(u.id)}" class="${u.is_active ? 'text-red-600' : 'text-emerald-700'} hover:underline">${u.is_active ? 'Désactiver' : 'Réactiver'}</button>`}</td></tr>`).join('');
     } catch (e) { tbody.innerHTML = `<tr><td colspan="6" class="py-4 text-red-500">${escapeHtml(e.message)}</td></tr>`; }
   }
-  $('user-add').addEventListener('click', async () => {
+  if (isAdmin) {
+    get('/api/settings/grading').then((d) => { $('grading-scale').value = String(d.data.grade_scale_max); }).catch(() => {});
+    $('grading-save').addEventListener('click', async () => {
+      try {
+        const d = await api('PUT', '/api/settings/grading', { grade_scale_max: Number($('grading-scale').value) });
+        gradeScaleMax = d.data.grade_scale_max; toast('Barème enregistré.');
+      } catch (e) { toast(e.message, 'err'); }
+    });
+  }
+  // Comptes : réservés à l'administrateur (l'API refuse /api/users aux autres rôles) ; la section est retirée pour les autres.
+  if (!isAdmin) document.getElementById('users-rows')?.closest('section')?.remove();
+  if (isAdmin) $('user-add').addEventListener('click', async () => {
     if (await formModal({ title: 'Ajouter un utilisateur', fields: USER_FIELDS, onSubmit: (v) => api('POST', '/api/users', v) })) { toast('Utilisateur créé.'); loadUsers(); }
   });
-  $('users-rows').addEventListener('click', async (ev) => {
+  if (isAdmin) $('users-rows').addEventListener('click', async (ev) => {
     const r = ev.target.closest('[data-user-role]'), t = ev.target.closest('[data-user-toggle]'), w = ev.target.closest('[data-user-pwd]');
     const user = users.find((u) => u.id === (r ? r.dataset.userRole : w ? w.dataset.userPwd : t && t.dataset.userToggle)); if (!user) return;
     if (w) {
@@ -863,7 +994,7 @@ async function openSettings() {
       try { await api('PUT', `/api/users/${encodeURIComponent(user.id)}`, { is_active: !user.is_active }); toast('Compte mis à jour.'); loadUsers(); } catch (e) { toast(e.message, 'err'); }
     }
   });
-  await loadUsers();
+  if (isAdmin) await loadUsers();
 }
 
 // ---------------------------------------------------------------- Dossier individuel
@@ -1345,11 +1476,15 @@ async function platformTenantDetail(id) {
       ${t.admins.length ? t.admins.map((a) => `<tr class="border-b border-slate-100"><td class="py-2 pr-3">${escapeHtml(a.full_name || '—')}</td><td class="py-2 pr-3">${escapeHtml(a.email)}</td><td class="py-2 pr-3 text-slate-500">${a.last_login_at ? new Date(a.last_login_at).toLocaleString('fr-FR') : 'jamais'}</td><td class="py-2 pr-3">${a.is_active ? 'Actif' : '<span class="text-red-600">Désactivé</span>'}</td>
         <td class="py-2 text-right whitespace-nowrap"><button data-pwd="${escapeHtml(a.id)}" data-who="${escapeHtml(a.email)}" class="${BTN_LIGHT}">Mot de passe</button> <button data-toggle="${escapeHtml(a.id)}" data-active="${a.is_active ? '1' : '0'}" class="${BTN_LIGHT}">${a.is_active ? 'Désactiver' : 'Réactiver'}</button></td></tr>`).join('') : '<tr><td colspan="5" class="py-3 text-slate-400">Aucun administrateur.</td></tr>'}</tbody></table></div>
       <p class="mt-3 text-xs text-slate-400">Le superadmin ne crée pas les employés : l’administrateur de l’établissement gère ses propres utilisateurs.</p></section>
+    <section class="${CARD}"><h3 class="font-bold mb-1">Apparence de l’établissement</h3><p class="text-xs text-slate-400 mb-3">Nom, slogan, logo et affiche de l’établissement. Le logo et le nom du site ne se modifient pas ici.</p>${identitySectionHtml(false)}${bannerSectionHtml()}</section>
     <section class="${CARD}"><div class="flex justify-between items-center mb-3"><h3 class="font-bold">Factures d’abonnement</h3><button id="pl-invoice" class="${BTN_LIGHT}">Nouvelle facture</button></div>
       ${invs.length ? `<div class="overflow-x-auto"><table class="w-full text-sm text-left"><tbody>${invs.map((i) => `<tr class="border-b border-slate-100"><td class="py-2 pr-3 font-semibold">${escapeHtml(i.number)}</td><td class="py-2 pr-3 whitespace-nowrap">${displayDate(i.period_start)} → ${displayDate(i.period_end)}</td><td class="py-2 pr-3 whitespace-nowrap">${money(i.amount)}</td><td class="py-2 pr-3">${invoiceBadge(i)}</td><td class="py-2 text-right"><button data-inv="${escapeHtml(i.id)}" class="${BTN_LIGHT}">Voir</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="text-sm text-slate-400">Aucune facture.</p>'}</section>
     <section class="${CARD}"><h3 class="font-bold mb-1">${suspended ? 'Réactiver l’établissement' : 'Suspendre l’établissement'}</h3>
       <p class="text-sm text-slate-500 mb-3">${suspended ? 'Les utilisateurs pourront de nouveau se connecter.' : 'Révocation sans suppression : l’accès est coupé immédiatement, toutes les données sont conservées.'}</p>
       <button id="pl-suspend" class="${BTN} ${suspended ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'} text-white">${suspended ? 'Réactiver' : 'Suspendre'}</button></section>`;
+  const tid = encodeURIComponent(id);
+  setupIdentitySection(`/api/platform/tenants/${tid}/identity`).catch((e) => toast(e.message, 'err'));
+  setupBannerSection(`/api/platform/tenants/${tid}/banner`).catch((e) => toast(e.message, 'err'));
   const reload = () => openPlatform('platform-tenants', { tenantId: id });
   $('pl-back').addEventListener('click', () => openPlatform('platform-tenants'));
   $('pl-edit').addEventListener('click', async () => {
@@ -1491,7 +1626,7 @@ async function loadIdentity() {
 function identitySectionHtml(platform) {
   return `<section id="idn-section" class="${CARD}">
     <h3 class="font-bold mb-1">Identité de l’application</h3>
-    <p class="text-sm text-slate-500 mb-3">${platform ? 'Nom, slogan et logo par défaut : affichés sur la page de connexion et dans les établissements qui n’ont pas leur propre identité.' : 'Nom, slogan et logo affichés dans le menu, sur la page de connexion et sur le tableau de bord de votre établissement.'}</p>
+    <p class="text-sm text-slate-500 mb-3">${platform ? 'Nom, slogan et logo par défaut : affichés sur la page de connexion et dans les établissements qui n’ont pas leur propre identité.' : 'Nom, slogan et logo affichés dans le menu, sur la page de connexion et sur le tableau de bord de cet établissement.'}</p>
     <div class="grid lg:grid-cols-2 gap-4">
       <div class="rounded-xl bg-[#0b172a] p-4 flex items-center gap-3 min-h-[88px]" aria-label="Aperçu">
         <div class="w-14 h-14 shrink-0 rounded-xl bg-gradient-to-tr from-amber-400 to-amber-300 flex items-center justify-center text-[#0b172a] text-2xl overflow-hidden"><i id="idn-prev-icon" class="fa-solid fa-graduation-cap"></i><img id="idn-prev-logo" alt="" class="hidden w-full h-full object-contain bg-white"></div>
@@ -1529,9 +1664,14 @@ async function setupIdentitySection(base) {
     $('idn-prev-logo').classList.toggle('hidden', !logo); $('idn-prev-icon').style.display = logo ? 'none' : '';
     if (logo) $('idn-prev-logo').src = logo; else $('idn-prev-logo').removeAttribute('src');
   };
+  let previewUrl = null;
   const refresh = async () => {
-    d = (await get(base)).data; await loadIdentity();
-    render(d.effective, d.effective.has_logo ? brandBlobUrl : null);
+    d = (await get(base)).data;
+    if (!base.includes('/api/platform/tenants/')) await loadIdentity();
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = null;
+    if (d.effective.has_logo) { const res = await fetch(`${base}/logo`, { headers: authHeaders() }); if (res.ok) previewUrl = URL.createObjectURL(await res.blob()); }
+    render(d.effective, previewUrl);
     $('idn-name').value = d.custom.app_name || ''; $('idn-slogan').value = d.custom.slogan || '';
     $('idn-rm-logo').classList.toggle('hidden', !d.custom.has_logo);
     $('idn-reset').classList.toggle('hidden', !(d.custom.app_name || d.custom.slogan || d.custom.has_logo));
