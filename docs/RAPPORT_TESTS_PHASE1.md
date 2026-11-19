@@ -148,14 +148,17 @@ Limites : il s’agit d’une copie de test alimentée par l’API de la version
 - Vérification visuelle : bulletin, reçu avec logo PNG semi-transparent. Palette à transparence et JPEG vérifiés séparément.
 - Limite connue : les factures et les reçus longs ne sont pas paginés automatiquement (cas courants : une page).
 
-### 7.9 Identité et affiche de l’application réservées au superadmin — Réalisé et vérifié
-Demande du 19/11/2026 : seul le superadmin modifie l’identité visible du site ; un établissement ne gère que ses comptes et sous-comptes.
-- Nom, slogan et logo de l’établissement (`tenant_identity`) : écriture refusée (403) à l’établissement, y compris à son administrateur. Lecture conservée pour tous les utilisateurs (`GET /api/settings/identity`, `/logo`).
-- Affiche d’accueil (`tenant_banners`) : `PUT /api/settings/banner/image`, `PUT /api/settings/banner/text`, `DELETE /api/settings/banner` renvoient 403. Lecture conservée (`GET /api/settings/banner`, `/image`).
-- Nouvelles routes superadmin, montées sous `/api/platform` (garde `requireSuperAdmin`) et ciblant un établissement vérifié (UUID valide : 400 ; établissement inexistant : 404) :
-  - `GET | PUT | DELETE /api/platform/tenants/:tenantId/identity[/text|/logo]`
-  - `GET | PUT | DELETE /api/platform/tenants/:tenantId/banner[/text|/image]`
-- Hypothèse retenue (à confirmer) : le logo utilisé sur les bulletins et reçus de l’établissement est, lui aussi, géré par le superadmin.
-- Frontend : sections identité et affiche retirées des Paramètres de l’établissement (remplacées par une mention explicative) ; ajoutées à la fiche établissement du superadmin, avec aperçu propre à cet établissement. L’aperçu n’altère plus l’identité affichée à la session.
-- Tests : unitaires 32/32 ; intégration 108/108 (écritures établissement → 403, superadmin → 200, cross-établissement, UUID invalide, établissement inconnu, logo des bulletins écrit par le superadmin).
-- Non vérifié : parcours navigateur de la fiche établissement (aucune recette automatisée sur cet écran).
+### 7.9 Identité : site réservé au superadmin, établissement maître de son compte — Réalisé et vérifié
+Règle retenue le 19/11/2026 :
+- **Site (plateforme)** : nom, slogan, logo et affiche par défaut sont modifiés par le superadmin uniquement (`/api/platform/identity`). Un administrateur d’établissement reçoit 403.
+- **Établissement** : son administrateur gère le nom, le slogan, le logo utilisé sur ses documents (bulletins, reçus, factures) et son affiche d’accueil (`/api/settings/identity`, `/api/settings/banner`).
+- **Superadmin, par établissement** : `GET | PUT | DELETE /api/platform/tenants/:tenantId/identity[/text|/logo]` et `GET | PUT | DELETE /api/platform/tenants/:tenantId/banner[/text|/image]`, avec vérification de l’établissement (UUID invalide : 400 ; inconnu : 404). Ces routes servent à la fiche établissement du superadmin.
+- Frontend : Paramètres de l’établissement inchangés pour l’administrateur ; la fiche établissement du superadmin affiche l’identité et l’affiche de cet établissement, avec un aperçu propre (sans toucher à l’identité de la session).
+- Quotas du contrat : appliqués à la création d’élèves (`POST /api/students`) et d’utilisateurs (`POST /api/users`) par `middleware/quota.js`. Les comptes parents ne comptent pas dans le quota d’utilisateurs.
+- Tests : unitaires 32/32 ; intégration 109/109, dont le superadmin qui édite l’identité d’un établissement et la refus de la même écriture à son administrateur, et le refus sur l’identité du site.
+- Non vérifié : parcours navigateur de la fiche établissement.
+
+**Points ouverts** (non traités dans cette livraison) :
+- Le quota est vérifié avant l’insertion sans verrou : deux créations simultanées peuvent dépasser la limite d’une unité.
+- La réactivation d’un compte désactivé ne passe pas par le contrôle de quota.
+- Les « contacts » (responsables d’élèves) ne sont pas soumis à un quota : le contrat ne le prévoit pas. À confirmer.

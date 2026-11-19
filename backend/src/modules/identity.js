@@ -88,10 +88,6 @@ const platformEdit = editRouter({
 });
 
 // Identité d'un établissement : lecture pour tous ses utilisateurs, écriture pour l'administrateur.
-// Écriture refusée à l'établissement : l'identité visible de l'application (nom, slogan, logo, affiche) est gérée
-// par le superadmin uniquement. Les comptes et sous-comptes de l'établissement restent de son ressort.
-const denyTenantWrite = (req, res) => res.status(403).json({ error: 'Réservé au superadmin : l’identité de l’application est gérée par la plateforme.' });
-
 const tenantCfgBase = {
   table: 'tenant_identity', keyCol: 'tenant_id', prefix: 'identity',
   async effective(req, mine) {
@@ -106,8 +102,9 @@ const tenantCfgBase = {
   fallbackLogo: () => readLogo('platform_identity', 'singleton', true)
 };
 
-// Lecture pour les utilisateurs de l'établissement ; écriture refusée (403).
-const tenantEdit = editRouter({ ...tenantCfgBase, key: (req) => req.tenantId, entityId: (req) => req.tenantId, guard: denyTenantWrite });
+// Identité propre à l'établissement : lecture pour tous ses utilisateurs, écriture pour son administrateur.
+// Le logo et le nom du site (plateforme) restent gérés par le superadmin (platformEdit).
+const tenantEdit = editRouter({ ...tenantCfgBase, key: (req) => req.tenantId, entityId: (req) => req.tenantId, guard: requireRole('admin') });
 
 // Public (page de connexion) : identité de la plateforme uniquement, aucune donnée d'établissement.
 const publicRouter = express.Router();
@@ -137,4 +134,4 @@ platformTenantIdentity.use('/tenants/:tenantId/identity', targetTenant, editRout
   prefix: 'platform.tenant_identity', guard: (req, res, next) => next()
 }));
 
-module.exports = { platformEdit, tenantEdit, publicRouter, DEFAULTS, platformTenantIdentity, targetTenant, denyTenantWrite };
+module.exports = { platformEdit, tenantEdit, publicRouter, DEFAULTS, platformTenantIdentity, targetTenant };

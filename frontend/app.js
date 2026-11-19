@@ -406,7 +406,7 @@ async function setupBannerSection(base) {
     $('banner-title').value = meta.title || ''; $('banner-subtitle').value = meta.subtitle || '';
     $('banner-reset').classList.toggle('hidden', !meta.custom && !meta.title && !meta.subtitle);
   };
-  const reload = async () => { meta = (await get(base)).data; await refresh(); };
+  const reload = async () => { if (!base.includes('/api/platform/tenants/')) await loadBanner(); meta = (await get(base)).data; await refresh(); };
   await refresh();
   $('banner-pick').addEventListener('click', () => $('banner-file').click());
   $('banner-file').addEventListener('change', async () => {
@@ -883,7 +883,7 @@ async function openSettings() {
       <p class="mt-2 text-sm">Nom : <strong id="tenant-name">${escapeHtml(tenant.name)}</strong> ${isAdmin ? '<button id="tenant-edit" class="ml-2 text-blue-600 hover:underline text-sm">Modifier</button>' : ''}</p></section>
     <section class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-3">Mon compte</h3><p class="text-sm text-slate-500">${escapeHtml(session.user.email)} · ${escapeHtml(ROLE_LABELS[session.user.role] || session.user.role)}</p><button id="pwd-btn" class="mt-3 px-4 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700">Changer mon mot de passe</button></section>
     ${isAdmin ? gradingSectionHtml() : ''}
-    ${isAdmin ? '<p class="text-xs text-slate-400">L’identité visible de l’application (nom, slogan, logo, affiche) est gérée par la plateforme. Vos comptes et sous-comptes restent gérés dans la section Utilisateurs.</p>' + subscriptionSectionHtml() + permissionsSectionHtml() : ''}
+    ${isAdmin ? bannerSectionHtml() + identitySectionHtml(false) + subscriptionSectionHtml() + permissionsSectionHtml() : ''}
     ${canReopen ? `<section class="bg-white rounded-2xl border border-slate-200 p-5"><div class="flex items-center justify-between mb-3"><h3 class="font-bold">Périodes scolaires (trimestres)</h3>${isAdmin ? `<button id="period-add" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-2"></i>Ajouter</button>` : ''}</div><div id="periods-list" class="text-sm space-y-2"></div><p class="mt-3 text-xs text-slate-400">Les périodes servent à filtrer les bulletins.</p></section>
     ${isAdmin ? `<section id="corrections-card" class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-3">Corrections de notes en attente</h3><div id="corrections-list" class="text-sm"></div></section>` : ''}
     <section class="bg-white rounded-2xl border border-slate-200 p-5"><div class="flex items-center justify-between mb-3"><h3 class="font-bold">Utilisateurs</h3><button id="user-add" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-2"></i>Ajouter</button></div>
@@ -895,6 +895,8 @@ async function openSettings() {
   });
   if (!canReopen) return;
   if (isAdmin) {
+  setupBannerSection('/api/settings/banner').catch((e) => toast(e.message, 'err'));
+  setupIdentitySection('/api/settings/identity').catch((e) => toast(e.message, 'err'));
   setupSubscription().catch((e) => toast(e.message, 'err'));
   setupPermissions().catch((e) => toast(e.message, 'err'));
   $('tenant-edit').addEventListener('click', async () => {
@@ -1474,7 +1476,7 @@ async function platformTenantDetail(id) {
       ${t.admins.length ? t.admins.map((a) => `<tr class="border-b border-slate-100"><td class="py-2 pr-3">${escapeHtml(a.full_name || '—')}</td><td class="py-2 pr-3">${escapeHtml(a.email)}</td><td class="py-2 pr-3 text-slate-500">${a.last_login_at ? new Date(a.last_login_at).toLocaleString('fr-FR') : 'jamais'}</td><td class="py-2 pr-3">${a.is_active ? 'Actif' : '<span class="text-red-600">Désactivé</span>'}</td>
         <td class="py-2 text-right whitespace-nowrap"><button data-pwd="${escapeHtml(a.id)}" data-who="${escapeHtml(a.email)}" class="${BTN_LIGHT}">Mot de passe</button> <button data-toggle="${escapeHtml(a.id)}" data-active="${a.is_active ? '1' : '0'}" class="${BTN_LIGHT}">${a.is_active ? 'Désactiver' : 'Réactiver'}</button></td></tr>`).join('') : '<tr><td colspan="5" class="py-3 text-slate-400">Aucun administrateur.</td></tr>'}</tbody></table></div>
       <p class="mt-3 text-xs text-slate-400">Le superadmin ne crée pas les employés : l’administrateur de l’établissement gère ses propres utilisateurs.</p></section>
-    <section class="${CARD}"><h3 class="font-bold mb-1">Apparence de l’établissement</h3><p class="text-xs text-slate-400 mb-3">Modifiable par le superadmin uniquement. L’établissement ne peut pas changer son identité ni son affiche.</p>${identitySectionHtml(false)}${bannerSectionHtml()}</section>
+    <section class="${CARD}"><h3 class="font-bold mb-1">Apparence de l’établissement</h3><p class="text-xs text-slate-400 mb-3">Nom, slogan, logo et affiche de l’établissement. Le logo et le nom du site ne se modifient pas ici.</p>${identitySectionHtml(false)}${bannerSectionHtml()}</section>
     <section class="${CARD}"><div class="flex justify-between items-center mb-3"><h3 class="font-bold">Factures d’abonnement</h3><button id="pl-invoice" class="${BTN_LIGHT}">Nouvelle facture</button></div>
       ${invs.length ? `<div class="overflow-x-auto"><table class="w-full text-sm text-left"><tbody>${invs.map((i) => `<tr class="border-b border-slate-100"><td class="py-2 pr-3 font-semibold">${escapeHtml(i.number)}</td><td class="py-2 pr-3 whitespace-nowrap">${displayDate(i.period_start)} → ${displayDate(i.period_end)}</td><td class="py-2 pr-3 whitespace-nowrap">${money(i.amount)}</td><td class="py-2 pr-3">${invoiceBadge(i)}</td><td class="py-2 text-right"><button data-inv="${escapeHtml(i.id)}" class="${BTN_LIGHT}">Voir</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="text-sm text-slate-400">Aucune facture.</p>'}</section>
     <section class="${CARD}"><h3 class="font-bold mb-1">${suspended ? 'Réactiver l’établissement' : 'Suspendre l’établissement'}</h3>
@@ -1624,7 +1626,7 @@ async function loadIdentity() {
 function identitySectionHtml(platform) {
   return `<section id="idn-section" class="${CARD}">
     <h3 class="font-bold mb-1">Identité de l’application</h3>
-    <p class="text-sm text-slate-500 mb-3">${platform ? 'Nom, slogan et logo par défaut : affichés sur la page de connexion et dans les établissements qui n’ont pas leur propre identité.' : 'Nom, slogan et logo affichés dans le menu, sur la page de connexion et sur le tableau de bord de cet établissement. Réservé au superadmin.'}</p>
+    <p class="text-sm text-slate-500 mb-3">${platform ? 'Nom, slogan et logo par défaut : affichés sur la page de connexion et dans les établissements qui n’ont pas leur propre identité.' : 'Nom, slogan et logo affichés dans le menu, sur la page de connexion et sur le tableau de bord de cet établissement.'}</p>
     <div class="grid lg:grid-cols-2 gap-4">
       <div class="rounded-xl bg-[#0b172a] p-4 flex items-center gap-3 min-h-[88px]" aria-label="Aperçu">
         <div class="w-14 h-14 shrink-0 rounded-xl bg-gradient-to-tr from-amber-400 to-amber-300 flex items-center justify-center text-[#0b172a] text-2xl overflow-hidden"><i id="idn-prev-icon" class="fa-solid fa-graduation-cap"></i><img id="idn-prev-logo" alt="" class="hidden w-full h-full object-contain bg-white"></div>
@@ -1665,7 +1667,7 @@ async function setupIdentitySection(base) {
   let previewUrl = null;
   const refresh = async () => {
     d = (await get(base)).data;
-    if (base === '/api/platform/identity') await loadIdentity();
+    if (!base.includes('/api/platform/tenants/')) await loadIdentity();
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     previewUrl = null;
     if (d.effective.has_logo) { const res = await fetch(`${base}/logo`, { headers: authHeaders() }); if (res.ok) previewUrl = URL.createObjectURL(await res.blob()); }

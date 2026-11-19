@@ -45,5 +45,5 @@ Une réponse sur ces trois points suffit pour que je poursuive la Phase 1 avec l
 ## D12 — Notes antérieures à la Phase 1 (19/11/2026)
 Décision de l’établissement : les notes existantes en `saisie` sont validées automatiquement par la migration 033, avec conservation du statut d’origine et trace d’audit. Retour arrière documenté dans la migration.
 
-## D13 — Identité et affiche réservées au superadmin (19/11/2026)
-Décision demandée par la direction de la plateforme : l’établissement ne modifie ni le nom, ni le slogan, ni le logo, ni l’affiche de l’application. Il gère uniquement ses comptes et sous-comptes. Les écritures passent par `/api/platform/tenants/:tenantId/…`. Hypothèse à confirmer : le logo des documents de l’établissement suit la même règle.
+## D13 — Identité : site vs établissement (19/11/2026, révisée)
+Décision de l’établissement : le logo, le nom et le slogan du **site** ne sont modifiés que par le superadmin. Chaque établissement gère **son** logo (documents), son nom, son slogan et son affiche, et ses comptes (utilisateurs, élèves, contacts, professeurs) dans les limites de son contrat. La première version de cette livraison retirait à l’établissement son identité propre ; elle a été corrigée.
