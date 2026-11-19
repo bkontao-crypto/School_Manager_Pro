@@ -920,6 +920,27 @@ if (!TEST_URL) {
         assert.equal(JSON.stringify(dash.json).includes('platform.'), false);
         assert.equal((await api('GET', '/api/platform/audit', { token: tokens.adminA })).status, 403);
       });
+
+      it('quotas : réactivation refusée à la limite ; créations simultanées jamais au-delà de la limite', async () => {
+        const count = async (sql) => Number((await pool.query(sql, [tid])).rows[0].n);
+        // réactivation d'un compte inactif alors que le quota d'utilisateurs est atteint
+        const activeNonParent = await count("SELECT count(*) AS n FROM users WHERE tenant_id = $1 AND is_active AND role <> 'parent'");
+        assert.equal((await P('PUT', `/tenants/${tid}`, { max_users: activeNonParent })).status, 200);
+        const inactive = (await pool.query("INSERT INTO users (tenant_id, email, password_hash, full_name, role, is_active) VALUES ($1, 'ancien@quota1.test', 'x', 'Ancien', 'user', false) RETURNING id", [tid])).rows[0].id;
+        const react = await api('PUT', `/api/users/${inactive}`, { token: adminToken, body: { is_active: true } });
+        assert.equal(react.status, 403);
+        assert.equal(react.json.code, 'quota_exceeded');
+        assert.equal((await pool.query('SELECT is_active FROM users WHERE id = $1', [inactive])).rows[0].is_active, false);
+        // six créations simultanées, deux places libres : exactement deux réussissent
+        const students = await count('SELECT count(*) AS n FROM students WHERE tenant_id = $1 AND deleted_at IS NULL');
+        assert.equal((await P('PUT', `/tenants/${tid}`, { max_students: students + 2 })).status, 200);
+        const results = await Promise.all([1, 2, 3, 4, 5, 6].map((i) => api('POST', '/api/students', { token: adminToken, body: { matricule: `RACE-${i}`, first_name: 'Race', last_name: `N${i}` } })));
+        assert.equal(results.filter((r) => r.status === 201).length, 2);
+        assert.equal(results.filter((r) => r.status === 403).length, 4);
+        assert.equal(await count('SELECT count(*) AS n FROM students WHERE tenant_id = $1 AND deleted_at IS NULL'), students + 2);
+        // retour à l'illimité pour la suite de la suite de tests
+        assert.equal((await P('PUT', `/tenants/${tid}`, { max_students: '', max_users: '' })).status, 200);
+      });
     });
 
     describe('Facturation des abonnements', () => {

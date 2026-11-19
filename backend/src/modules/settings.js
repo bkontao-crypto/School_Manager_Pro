@@ -3,6 +3,7 @@
 //  GET/POST /api/users, PUT /:id   : comptes de l'établissement (jamais de superadmin)
 
 const express = require('express');
+const { lockQuota } = require('../middleware/quota');
 const onlinePayments = require('../utils/onlinePayments');
 const permissions = require('../utils/permissions');
 const db = require('../utils/db');
@@ -198,11 +199,14 @@ users.post('/', wrap(async (req, res) => {
   if (weak) errors.push({ field: 'password', message: weak });
   if (errors.length) return invalid(res, errors);
   const hash = await password.hash(values.password);
-  const r = await db.query(
-    `INSERT INTO users (tenant_id, email, password_hash, full_name, role) VALUES ($1, $2, $3, $4, $5)
-     RETURNING id, email, full_name, role, is_active, created_at`,
-    [req.tenantId, values.email, hash, values.full_name, values.role]
-  );
+  const r = await db.withTransaction(async (client) => {
+    if (values.role !== 'parent') await lockQuota(client, req.tenantId, 'users');
+    return client.query(
+      `INSERT INTO users (tenant_id, email, password_hash, full_name, role) VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, email, full_name, role, is_active, created_at`,
+      [req.tenantId, values.email, hash, values.full_name, values.role]
+    );
+  });
   await audit(req, { action: 'user.create', entity: 'user', entityId: r.rows[0].id, details: { role: values.role } });
   res.status(201).json({ data: r.rows[0] });
 }));
@@ -225,8 +229,15 @@ users.put('/:id', wrap(async (req, res) => {
   }
   const sets = []; const params = [req.params.id, req.tenantId];
   for (const [k, v] of Object.entries(values)) { params.push(v); sets.push(`${k} = $${params.length}`); }
-  const r = await db.query(
-    `UPDATE users SET ${sets.join(', ')} WHERE id = $1 AND tenant_id = $2 RETURNING id, email, full_name, role, is_active`, params);
+  const r = await db.withTransaction(async (client) => {
+    // Réactivation d'un compte : soumise au quota d'utilisateurs (un compte parent n'y est pas compté).
+    if (values.is_active === true) {
+      const cur = await client.query('SELECT is_active, role FROM users WHERE id = $1 AND tenant_id = $2', [req.params.id, req.tenantId]);
+      if (cur.rows[0] && !cur.rows[0].is_active && cur.rows[0].role !== 'parent') await lockQuota(client, req.tenantId, 'users');
+    }
+    return client.query(
+      `UPDATE users SET ${sets.join(', ')} WHERE id = $1 AND tenant_id = $2 RETURNING id, email, full_name, role, is_active`, params);
+  });
   if (!r.rows.length) throw new HttpError(404, 'Utilisateur introuvable.');
   await audit(req, { action: 'user.update', entity: 'user', entityId: r.rows[0].id, details: values });
   res.json({ data: r.rows[0] });
