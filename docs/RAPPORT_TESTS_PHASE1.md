@@ -228,3 +228,13 @@ Réalisé et vérifié (navigateur, Chromium en émulation) :
 - Tests : unitaires 32/32 ; intégration 111/111 ; recettes navigateur 18/18 et 9/9 (base réinitialisée).
 
 Non vérifié : messages serveur dans toutes les modales (seuls élève et paiement ont été contrôlés) ; modification sur tablette.
+
+## 14. Messages de champ sur les autres modales (contrôle sans modification de code)
+
+Vérifié dans le navigateur (Chromium en émulation) :
+- Notes : « Renseignez : Élève, Matière, Note (sur 20). » ; note 99 refusée : « Note (sur 20) : Doit être inférieur ou égal à 20 ».
+- Classes : « Renseignez : Nom de la classe. » ; effectif -4 refusé : « Effectif maximum : Doit être supérieur à 0 ».
+- Présences : « Renseignez : Élève, Date. ».
+
+Non modifié : aucune anomalie trouvée sur ces modales.
+Non vérifié : modales Enseignants, Bibliothèque, Stocks ; tablette.
