@@ -187,3 +187,12 @@ Réalisé et vérifié :
 - Tests : unitaires 32/32 ; intégration 111/111 ; recettes navigateur 18/18 et 9/9 après réinitialisation de la base de test. Les recettes ouvrent désormais la rubrique avant de cliquer sur un module (`navTo`).
 
 Non vérifié : tablette (768–1023 px) et navigateur autre que Chromium.
+
+## 10. Refonte UI — phase 4 (pages de liste des modules)
+
+Réalisé et vérifié :
+- Toutes les pages de liste (élèves, enseignants, classes, notes, présences, paiements, stocks, etc.) partagent un même gabarit : carte « panel », en-tête de tableau en majuscules, lignes survolées, bouton principal aux couleurs de la maquette.
+- Captures contrôlées : liste des élèves sur ordinateur (1440 px) et tablette (900 px), sans débordement horizontal.
+- Tests : unitaires 32/32 ; intégration 111/111 ; recettes navigateur 18/18 et 9/9 (base réinitialisée).
+
+Non vérifié : écrans de formulaire (modales) et pages notes / paiements capturées une à une ; tablette avec d'autres modules.

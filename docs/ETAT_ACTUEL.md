@@ -2,7 +2,7 @@
 **Date :** 2026-11-20 — **Branche de travail :** `refonte-ui-phase1` — **Dernier commit :** `3e71041` (poussé, PR #3 en brouillon, non fusionnée)
 
 ## Dernière phase terminée et vérifiée
-Refonte UI phase 3 : menu latéral à rubriques repliables selon la maquette, mobile 390 px vérifié. Phase 2 (tableau de bord, affiche multi-images) déjà vérifiée.
+Refonte UI phase 4 : pages de liste des modules alignées sur la maquette, vérifiées sur ordinateur et tablette. Phase 3 (menu) et phase 2 (tableau de bord, affiche) déjà vérifiées.
 
 ## Tests exécutés (sur ce commit)
 - Unitaires : 32/32
@@ -21,4 +21,4 @@ Refonte UI phase 3 : menu latéral à rubriques repliables selon la maquette, mo
 - `docs/SUIVI_EXECUTION_SCHOOL_MANAGER_PRO.xlsx` : non régénéré depuis la phase 2 (fichier régénéré seulement sur demande).
 
 ## Prochaine tâche
-Phase 4 à proposer : pages modules (élèves, classes, notes, paiements) alignées sur la maquette, puis vérification tablette.
+À proposer : vérifier les modales de formulaire et les pages notes et paiements une à une (phase 5 proposée).
