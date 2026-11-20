@@ -247,3 +247,12 @@ Vérifié dans le navigateur (Chromium en émulation) :
 - Stocks : « Renseignez : Article. » ; quantité non numérique : « Quantité : Doit être un nombre ».
 
 Non modifié : aucune anomalie trouvée. Non vérifié : ces modales sur tablette.
+
+## 16. Modales sur tablette (768 px et 1024 px, émulation Chromium)
+
+Vérifié :
+- Modale « Ajouter un élève » : entièrement visible à l'écran, sans débordement, message d'erreur lisible (« Renseignez : Matricule, Prénom, Nom. »).
+- Modale « Ajouter un paiement » à 768 px : liste de résultats de la recherche d'élève lisible (vérifié en phase 5 suite).
+- Aucun débordement horizontal de page.
+
+Non vérifié : appareils physiques (seule l'émulation Chromium a été utilisée) ; modales de notes, classes et stocks sur tablette.
