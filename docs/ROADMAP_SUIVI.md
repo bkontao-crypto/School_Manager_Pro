@@ -8,6 +8,7 @@ Le détail des corrections issues de l'audit est dans `docs/AUDIT_SUIVI.md`.
 - [x] Écrans : emploi du temps, rapports (+ export CSV), paramètres, utilisateurs, fil de messages, RH, documents, stocks
 - [x] Modules connectés : élèves (dossier individuel, suppression logique), classes, enseignants, présences, notes, paiements (reçus numérotés), messagerie, documents, stocks, notifications, RH, bibliothèque, cantine, transport
 - [x] Tableau de bord alimenté par des statistiques SQL
+- [x] Refonte UI phase 2 : tableau de bord selon la maquette (tendances serveur ou « Pas de donnée »), affiche d'accueil en diaporama de 6 images maximum (v2.23.0, branche `refonte-ui-phase1`)
 - [x] Interface locale (sans CDN), connexion, modales, PWA testée hors ligne
 - [x] Tests automatisés (unitaires + intégration)
 - [x] Affiche d'accueil personnalisable par établissement (exigences de format, taille, résolution) + affiche par défaut
