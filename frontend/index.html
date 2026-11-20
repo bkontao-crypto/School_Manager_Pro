@@ -20,115 +20,97 @@
 
         <!-- ================= SIDEBAR ================= -->
         <div id="sidebar-backdrop" class="hidden fixed inset-0 bg-black/50 z-30 lg:hidden"></div>
-        <aside id="sidebar" class="fixed lg:static inset-y-0 left-0 w-64 max-w-[85vw] bg-[#0b172a] text-slate-300 flex flex-col flex-shrink-0 overflow-y-auto transition-all duration-300 z-40 shadow-2xl lg:shadow-none">
+        <aside id="sidebar" class="fixed lg:static inset-y-0 left-0 w-64 max-w-[85vw] bg-navy-900 text-slate-300 flex flex-col flex-shrink-0 overflow-y-auto transition-all duration-300 z-40 shadow-2xl lg:shadow-none">
             
-            <!-- Logo Section -->
-            <div class="px-5 py-6 flex items-center space-x-3 border-b border-slate-800/60">
-                <div class="w-11 h-11 shrink-0 bg-gradient-to-tr from-amber-400 to-amber-300 rounded-xl flex items-center justify-center text-[#0b172a] text-xl shadow-lg shadow-amber-500/20 overflow-hidden">
-                    <i id="brand-icon" class="fa-solid fa-graduation-cap"></i>
-                    <img id="brand-logo-img" alt="" class="hidden w-full h-full object-contain bg-white">
+            <!-- Logo (maquette officielle) ; identité de l'établissement affichée seulement si personnalisée -->
+            <div class="brand-block">
+                <div id="brand-default" class="brand-tile">
+                    <img src="/assets/img/logo-smp.png" alt="SCHOOL MANAGER PRO" class="brand-logo">
                 </div>
-                <div id="brand-default">
-                    <h1 class="text-white font-extrabold text-lg leading-tight tracking-wide">SCHOOL</h1>
-                    <div class="flex items-center space-x-1">
-                        <span class="text-amber-400 font-bold text-xs tracking-widest">MANAGER</span>
-                        <span class="bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">PRO</span>
+                <div id="brand-custom" class="hidden brand-tile flex items-center gap-3 min-w-0">
+                    <div class="w-11 h-11 shrink-0 rounded-xl bg-white flex items-center justify-center overflow-hidden">
+                        <i id="brand-icon" class="fa-solid fa-graduation-cap text-navy-900"></i>
+                        <img id="brand-logo-img" alt="" class="hidden w-full h-full object-contain">
                     </div>
-                </div>
-                <div id="brand-custom" class="hidden min-w-0">
-                    <h1 id="brand-name" class="text-white font-extrabold text-base leading-tight tracking-wide truncate"></h1>
-                    <p id="brand-slogan" class="text-amber-400 text-[11px] font-medium truncate"></p>
-                </div>
-            </div>
-
-            <!-- Profile Badge -->
-            <div class="px-5 py-4 border-b border-slate-800/60 flex items-center space-x-3">
-                <div class="relative">
-                    <img src="/assets/img/avatar.svg" 
-                         alt="Administrateur" 
-                         class="w-11 h-11 rounded-full object-cover border-2 border-slate-600">
-                    <span class="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-[#0b172a] rounded-full"></span>
-                </div>
-                <div class="flex-1 min-w-0">
-                    <h2 id="user-name" class="text-sm font-semibold text-white truncate">—</h2>
-                    <div class="flex items-center text-xs text-slate-400">
-                        <span id="user-role" class="truncate">—</span>
+                    <div class="min-w-0">
+                        <h1 id="brand-name" class="text-navy-900 font-bold text-base leading-tight truncate"></h1>
+                        <p id="brand-slogan" class="text-royal-600 text-[11px] font-medium truncate"></p>
                     </div>
                 </div>
             </div>
 
             <!-- Navigation Links -->
             <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-                <a href="#" data-module="dashboard" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-white bg-blue-600 font-medium shadow-md shadow-blue-600/30">
+                <a href="#" data-module="dashboard" class="nav-link is-active">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-house w-5 text-center text-sm"></i>
                         <span class="text-sm">Tableau de bord</span>
                     </div>
                 </a>
 
-                <a href="#" data-module="portal" class="hidden flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="portal" class="nav-link hidden">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-children w-5 text-center text-sm"></i>
                         <span class="text-sm">Mes enfants</span>
                     </div>
                 </a>
 
-                <a href="#" data-module="students" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="students" class="nav-link">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-user-group w-5 text-center text-sm"></i>
                         <span class="text-sm">Élèves</span>
                     </div>
                 </a>
 
-                <a href="#" data-module="teachers" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="teachers" class="nav-link">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-chalkboard-user w-5 text-center text-sm"></i>
                         <span class="text-sm">Enseignants</span>
                     </div>
                 </a>
 
-                <a href="#" data-module="classes" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="classes" class="nav-link">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-border-all w-5 text-center text-sm"></i>
                         <span class="text-sm">Classes</span>
                     </div>
                 </a>
 
-                <a href="#" data-module="timetable" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="timetable" class="nav-link">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-calendar-days w-5 text-center text-sm"></i>
                         <span class="text-sm">Emploi du temps</span>
                     </div>
                 </a>
-                <a href="#" data-module="grades" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="grades" class="nav-link">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-file-pen w-5 text-center text-sm"></i>
                         <span class="text-sm">Notes</span>
                     </div>
                 </a>
 
-                <a href="#" data-module="attendances" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="attendances" class="nav-link">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-clipboard-check w-5 text-center text-sm"></i>
                         <span class="text-sm">Présences</span>
                     </div>
                 </a>
 
-                <a href="#" data-module="payments" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="payments" class="nav-link">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-wallet w-5 text-center text-sm"></i>
                         <span class="text-sm">Paiements</span>
                     </div>
                 </a>
 
-                <a href="#" data-module="broadcasts" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="broadcasts" class="nav-link">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-bullhorn w-5 text-center text-sm"></i>
                         <span class="text-sm">Communication</span>
                     </div>
                 </a>
 
-                <a href="#" data-module="messages" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="messages" class="nav-link">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-envelope w-5 text-center text-sm"></i>
                         <span class="text-sm">Messages</span>
@@ -136,53 +118,53 @@
                     
                 </a>
 
-                <a href="#" data-module="library" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="library" class="nav-link">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-book w-5 text-center text-sm"></i>
                         <span class="text-sm">Bibliothèque</span>
                     </div>
                 </a>
 
-                <a href="#" data-module="canteen" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="canteen" class="nav-link">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-utensils w-5 text-center text-sm"></i>
                         <span class="text-sm">Cantine</span>
                     </div>
                 </a>
 
-                <a href="#" data-module="transport" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="transport" class="nav-link">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-bus w-5 text-center text-sm"></i>
                         <span class="text-sm">Transport</span>
                     </div>
                 </a>
 
-                <a href="#" data-module="hr" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="hr" class="nav-link">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-id-badge w-5 text-center text-sm"></i>
                         <span class="text-sm">Personnel (RH)</span>
                     </div>
                 </a>
-                <a href="#" data-module="documents" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="documents" class="nav-link">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-file-lines w-5 text-center text-sm"></i>
                         <span class="text-sm">Documents</span>
                     </div>
                 </a>
-                <a href="#" data-module="stocks" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="stocks" class="nav-link">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-boxes-stacked w-5 text-center text-sm"></i>
                         <span class="text-sm">Stocks</span>
                     </div>
                 </a>
-                <a href="#" data-module="reports" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="reports" class="nav-link">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-chart-column w-5 text-center text-sm"></i>
                         <span class="text-sm">Rapports</span>
                     </div>
                 </a>
 
-                <a href="#" data-module="settings" class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="settings" class="nav-link">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-gear w-5 text-center text-sm"></i>
                         <span class="text-sm">Paramètres</span>
@@ -190,54 +172,59 @@
                 </a>
 
                 <p id="nav-platform-title" class="hidden px-3.5 pt-1 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Plateforme</p>
-                <a href="#" data-module="platform-overview" class="hidden flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="platform-overview" class="nav-link hidden">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-gauge-high w-5 text-center text-sm"></i>
                         <span class="text-sm">Vue d’ensemble</span>
                     </div>
                 </a>
-                <a href="#" data-module="platform-tenants" class="hidden flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="platform-tenants" class="nav-link hidden">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-school w-5 text-center text-sm"></i>
                         <span class="text-sm">Établissements</span>
                     </div>
                 </a>
-                <a href="#" data-module="platform-plans" class="hidden flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="platform-plans" class="nav-link hidden">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-layer-group w-5 text-center text-sm"></i>
                         <span class="text-sm">Packs et quotas</span>
                     </div>
                 </a>
-                <a href="#" data-module="platform-billing" class="hidden flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="platform-billing" class="nav-link hidden">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-file-invoice-dollar w-5 text-center text-sm"></i>
                         <span class="text-sm">Facturation</span>
                     </div>
                 </a>
-                <a href="#" data-module="platform-mail" class="hidden flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="platform-mail" class="nav-link hidden">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-envelope w-5 text-center text-sm"></i>
                         <span class="text-sm">E-mails</span>
                     </div>
                 </a>
-                <a href="#" data-module="platform-audit" class="hidden flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="platform-audit" class="nav-link hidden">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-clock-rotate-left w-5 text-center text-sm"></i>
                         <span class="text-sm">Journal</span>
                     </div>
                 </a>
-                <a href="#" data-module="platform-identity" class="hidden flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="platform-identity" class="nav-link hidden">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-palette w-5 text-center text-sm"></i>
                         <span class="text-sm">Identité</span>
                     </div>
                 </a>
-                <a href="#" data-module="platform-account" class="hidden flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-slate-800/60 hover:text-white transition-colors font-medium">
+                <a href="#" data-module="platform-account" class="nav-link hidden">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-user-gear w-5 text-center text-sm"></i>
                         <span class="text-sm">Mon compte</span>
                     </div>
                 </a>
+
+                <div class="sidebar-promo" aria-hidden="true">
+                    <i class="fa-solid fa-handshake-angle text-2xl"></i>
+                    <p>Ensemble pour<br>une éducation de qualité !</p>
+                </div>
 
                 <div class="pt-4 mt-2 border-t border-slate-800/60">
                     <a href="#" id="logout-btn" class="flex items-center space-x-3 px-3.5 py-2.5 rounded-lg text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-colors font-medium">
@@ -269,12 +256,19 @@
                 </div>
 
                 <!-- Right Utilities -->
-                                <div class="flex items-center space-x-3 sm:space-x-5 flex-shrink-0">
-                    <!-- Notification Bell -->
-                    <button id="notif-btn" type="button" aria-label="Notifications" data-module="notifications" class="relative p-2 text-slate-500 hover:text-blue-600 transition-colors rounded-full hover:bg-slate-100"><i class="fa-regular fa-bell text-lg"></i><span id="notif-badge" class="hidden absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold min-w-4 h-4 px-1 rounded-full items-center justify-center"></span></button>
+                <div class="flex items-center space-x-3 sm:space-x-4 flex-shrink-0">
+                    <button id="notif-btn" type="button" aria-label="Notifications" data-module="notifications" class="relative p-2 text-slate-500 hover:text-royal-600 transition-colors rounded-full hover:bg-slate-100"><i class="fa-regular fa-bell text-lg"></i></button>
 
-                    <!-- Date Indicator -->
-                    <div class="hidden md:flex items-center space-x-2 text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/80 text-xs font-medium"><i class="fa-regular fa-calendar text-blue-600"></i><span id="today-date">—</span></div>
+                    <div class="hidden md:flex items-center space-x-2 text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/80 text-xs font-medium"><i class="fa-regular fa-calendar text-royal-600"></i><span id="today-date" class="capitalize"></span></div>
+
+                    <div class="user-chip">
+                        <img src="/assets/img/avatar.svg" alt="" class="w-9 h-9 rounded-full object-cover ring-2 ring-royal-100">
+                        <div class="hidden sm:block leading-tight min-w-0">
+                            <p id="user-name" class="text-sm font-semibold text-ink truncate max-w-[10rem]">—</p>
+                            <p id="user-role" class="text-xs text-slate-500 truncate max-w-[10rem]">—</p>
+                        </div>
+                        <i class="fa-solid fa-chevron-down text-[10px] text-slate-400"></i>
+                    </div>
                 </div>
             </header>
 
@@ -498,6 +492,7 @@
                 <div>
                     © <span id="footer-year"></span> <strong id="footer-brand" class="text-slate-700">SCHOOL MANAGER PRO</strong>. Tous droits réservés.
                 </div>
+                <p class="hidden lg:block font-semibold text-royal-600">Une école connectée, une éducation réussie !</p>
                 <div class="flex items-center space-x-4">
                     <div class="flex items-center space-x-1.5">
                         <span id="status-dot" class="w-2 h-2 rounded-full bg-slate-300"></span>
@@ -513,10 +508,10 @@
     </div>
 
     <!-- Connexion -->
-    <div id="login-overlay" class="hidden fixed inset-0 z-50 bg-[#0b172a] flex items-center justify-center p-4">
+    <div id="login-overlay" class="hidden fixed inset-0 z-50 bg-navy-900 flex items-center justify-center p-4">
         <form id="login-form" class="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-7 space-y-4" novalidate>
             <div class="flex items-center space-x-3 mb-1">
-                <div class="w-11 h-11 shrink-0 bg-gradient-to-tr from-amber-400 to-amber-300 rounded-xl flex items-center justify-center text-[#0b172a] text-xl overflow-hidden"><i id="login-icon" class="fa-solid fa-graduation-cap"></i><img id="login-logo-img" alt="" class="hidden w-full h-full object-contain bg-white"></div>
+                <div class="w-14 h-14 shrink-0 bg-white rounded-xl flex items-center justify-center overflow-hidden ring-1 ring-slate-200"><img src="/assets/img/logo-smp.png" alt="" class="w-full h-full object-contain p-1"><i id="login-icon" class="hidden"></i><img id="login-logo-img" alt="" class="hidden w-full h-full object-contain bg-white"></div>
                 <div class="min-w-0"><h1 id="login-brand-name" class="font-extrabold text-slate-900 leading-tight">SCHOOL MANAGER PRO</h1><p id="login-brand-slogan" class="hidden text-xs font-medium text-amber-600"></p><p class="text-xs text-slate-500">Connexion à votre établissement</p></div>
             </div>
             <label class="block text-xs font-semibold text-slate-600">Code de l’établissement

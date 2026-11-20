@@ -264,8 +264,8 @@ function showView() { dashboardNodes().forEach((n) => n.classList.add('hidden'))
 function setActiveNav(key) {
   document.querySelectorAll('nav [data-module]').forEach((a) => {
     const on = a.dataset.module === key;
-    a.classList.toggle('bg-blue-600', on); a.classList.toggle('text-white', on); a.classList.toggle('shadow-md', on);
-    a.classList.toggle('text-slate-400', !on);
+    a.classList.toggle('is-active', on);
+    if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   });
 }
 
