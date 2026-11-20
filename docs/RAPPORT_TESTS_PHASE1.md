@@ -207,3 +207,14 @@ Vérifié visuellement (captures sur ordinateur 1440 px) :
 Vérifié fonctionnellement (non modifié en phase 5) : parcours de notes et de paiements couverts par les recettes navigateur 18/18 et les tests d'intégration 111/111 (rejoués sur base réinitialisée).
 
 Non vérifié : messages d'erreur de validation affichés dans les modales ; modale de modification ; tablette sur les modales.
+
+## 12. Refonte UI — phase 5 (suite) : sélection d'élève, erreurs de modale, tablette
+
+Réalisé et vérifié :
+- Sélection d'élève (paiements, notes, présences) : un seul champ de recherche, liste cliquable des résultats (8 maximum), élève sélectionné affiché et confirmé ; l'identifiant n'est transmis qu'après choix. Vérifié dans le navigateur : sélection puis enregistrement, la modale se ferme.
+- Erreur de champ obligatoire : la modale nomme désormais les champs manquants (« Renseignez : Élève, Montant (F CFA) ») avant tout envoi. Avant : « Champ obligatoire ; Champ obligatoire ».
+- Erreur serveur : montant invalide affiché dans la modale (« Doit être un nombre »). Limite connue : le message serveur ne nomme pas le champ.
+- Tablette 768 px et 1024 px : aucun débordement de page, modales et liste de résultats lisibles. Cellules des listes sur une ligne, défilement horizontal dans la carte si nécessaire.
+- Tests : unitaires 32/32 ; intégration 111/111 ; recettes navigateur 18/18 et 9/9 (base réinitialisée).
+
+Non vérifié : modale de modification ; tablettes réelles (seul le moteur Chromium en émulation a été utilisé).

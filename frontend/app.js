@@ -105,8 +105,12 @@ function fieldHtml(f, value) {
   if (f.type === 'select') {
     control = `<select name="${f.name}" ${req} class="${INPUT_CLS}">${f.required ? '' : '<option value="">—</option>'}${f.options.map(([val, text]) => `<option value="${escapeHtml(val)}" ${String(val) === String(v) ? 'selected' : ''}>${escapeHtml(text)}</option>`).join('')}</select>`;
   } else if (f.type === 'student') {
-    control = `<input type="search" data-student-search placeholder="Tapez un nom ou un matricule…" autocomplete="off" class="${INPUT_CLS}">
-      <select name="${f.name}" ${req} class="${INPUT_CLS}"><option value="">Choisissez un élève après la recherche</option></select>`;
+    control = `<span class="relative block mt-1" data-student-picker>
+      <input type="search" data-student-search placeholder="Tapez un nom ou un matricule…" autocomplete="off" class="${INPUT_CLS} mt-0">
+      <input type="hidden" name="${f.name}" value="${escapeHtml(v)}" data-student-value>
+      <span data-student-results class="hidden absolute z-20 left-0 right-0 mt-1 max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg py-1 block"></span>
+      <span data-student-status class="block mt-1 text-xs font-normal text-slate-500">Saisissez au moins 2 caractères.</span>
+    </span>`;
   } else if (f.type === 'class') {
     control = `<select name="${f.name}" ${req} data-class-select data-value="${escapeHtml(v)}" class="${INPUT_CLS}"><option value="">Chargement…</option></select>`;
   } else if (f.type === 'teacher') {
@@ -143,21 +147,39 @@ async function hydrateFormWidgets(root) {
       });
     } catch (e) { teacherSelects.forEach((sel) => { sel.innerHTML = '<option value="">Enseignants indisponibles</option>'; }); }
   }
-  root.querySelectorAll('[data-student-search]').forEach((input) => {
-    const select = input.nextElementSibling;
-    let timer;
+  root.querySelectorAll('[data-student-picker]').forEach((picker) => {
+    const input = picker.querySelector('[data-student-search]');
+    const hidden = picker.querySelector('[data-student-value]');
+    const box = picker.querySelector('[data-student-results]');
+    const status = picker.querySelector('[data-student-status]');
+    const setStatus = (text, ok) => { status.textContent = text; status.className = `block mt-1 text-xs font-normal ${ok ? 'text-emerald-700 font-semibold' : 'text-slate-500'}`; };
+    let timer; let seq = 0; let found = [];
+    const pick = (st) => {
+      hidden.value = st.id; input.value = `${st.last_name} ${st.first_name} — ${st.matricule}`;
+      box.classList.add('hidden'); setStatus('Élève sélectionné.', true);
+    };
     input.addEventListener('input', () => {
-      clearTimeout(timer);
+      hidden.value = ''; clearTimeout(timer);
+      const q = input.value.trim();
+      if (q.length < 2) { box.classList.add('hidden'); setStatus('Saisissez au moins 2 caractères.', false); return; }
+      setStatus('Recherche…', false);
       timer = setTimeout(async () => {
-        const q = input.value.trim();
-        if (q.length < 2) return;
+        const mine = ++seq;
         try {
-          const list = rows(await get(`/api/students?q=${encodeURIComponent(q)}&limit=20`));
-          select.innerHTML = list.length
-            ? list.map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.last_name)} ${escapeHtml(s.first_name)} — ${escapeHtml(s.matricule)}</option>`).join('')
-            : '<option value="">Aucun élève trouvé</option>';
-        } catch (e) { select.innerHTML = `<option value="">${escapeHtml(e.message)}</option>`; }
+          const list = rows(await get(`/api/students?q=${encodeURIComponent(q)}&limit=8`));
+          if (mine !== seq) return;
+          found = list;
+          box.innerHTML = list.length
+            ? list.map((st) => `<button type="button" data-pick="${escapeHtml(st.id)}" class="w-full text-left px-3 py-2 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none flex items-center justify-between gap-3"><span class="text-slate-800">${escapeHtml(st.last_name)} ${escapeHtml(st.first_name)}</span><span class="text-xs text-slate-500 shrink-0">${escapeHtml(st.matricule)}</span></button>`).join('')
+            : '<span class="block px-3 py-2 text-slate-500">Aucun élève trouvé.</span>';
+          box.classList.remove('hidden');
+          setStatus(list.length ? 'Choisissez un élève dans la liste.' : 'Aucun élève ne correspond à cette recherche.', false);
+        } catch (e) { box.classList.add('hidden'); setStatus(e.message, false); }
       }, 250);
+    });
+    box.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('[data-pick]'); if (!btn) return;
+      const st = found.find((x) => x.id === btn.dataset.pick); if (st) pick(st);
     });
   });
 }
@@ -185,8 +207,11 @@ function formModal({ title, fields, values = {}, submit = 'Enregistrer', onSubmi
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const btn = form.querySelector('button:not([type=button])');
+    const data = collectForm(form, fields);
+    const missing = fields.filter((f) => f.required && !(f.name in data)).map((f) => f.label);
+    if (missing.length) { $('modal-error').textContent = `Renseignez : ${missing.join(', ')}.`; return; }
     btn.disabled = true;
-    try { await onSubmit(collectForm(form, fields)); closeModal(true); }
+    try { await onSubmit(data); closeModal(true); }
     catch (e) { $('modal-error').textContent = e.message; btn.disabled = false; }
   });
   return p;
@@ -810,7 +835,7 @@ async function openModule(key, opts = {}) {
       $('page-prev').disabled = listState.offset === 0;
       $('page-next').disabled = listState.offset + data.length >= total;
       const myPending = key === 'grades' ? Object.fromEntries(rows(await get('/api/grades/corrections/mine')).map((c) => [c.grade_id, c.id])) : {};
-      tbody.innerHTML = data.length ? data.map((item) => `<tr class="border-b border-slate-100 hover:bg-slate-50/70">${cfg.columns.map(([k, , fmt]) => `<td class="py-3 px-3 first:pl-4 text-slate-700">${renderCell(item[k], fmt)}</td>`).join('')}${key === 'students'
+      tbody.innerHTML = data.length ? data.map((item) => `<tr class="border-b border-slate-100 hover:bg-slate-50/70">${cfg.columns.map(([k, , fmt]) => `<td class="py-3 px-3 first:pl-4 text-slate-700 whitespace-nowrap">${renderCell(item[k], fmt)}</td>`).join('')}${key === 'students'
         ? `<td class="py-3 pr-2 whitespace-nowrap"><button type="button" data-act="profile" data-id="${escapeHtml(item.id)}" class="text-emerald-700 hover:underline mr-3">Dossier</button>${writable ? `<button type="button" data-act="edit" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline mr-3">Modifier</button><button type="button" data-act="delete" data-id="${escapeHtml(item.id)}" class="text-red-600 hover:underline">Supprimer</button>` : ''}</td>` : key === 'payments' ? `<td class="py-3 pr-2">${item.status === 'paye' ? `<button type="button" data-act="receipt" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline"><i class="fa-solid fa-file-pdf mr-1"></i>Reçu</button>` : ''}</td>` : key === 'documents' ? `<td class="py-3 pr-2 whitespace-nowrap">${item.original_name ? `<button type="button" data-act="download" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline mr-3">Télécharger</button>` : ''}${writable && !item.original_name ? `<button type="button" data-act="upload" data-id="${escapeHtml(item.id)}" class="text-emerald-700 hover:underline">Joindre un fichier</button>` : ''}</td>` : key === 'grades' ? `<td class="py-3 pr-2 whitespace-nowrap">${item.status === 'saisie' && session.user.role === 'admin' ? `<button type="button" data-act="validate" data-id="${escapeHtml(item.id)}" class="text-emerald-700 hover:underline mr-3">Valider</button><button type="button" data-act="cancel" data-id="${escapeHtml(item.id)}" class="text-red-600 hover:underline">Annuler</button>` : ''}${item.status === 'validee' && writable ? (myPending[item.id] ? `<button type="button" data-act="withdraw" data-id="${escapeHtml(item.id)}" data-cid="${escapeHtml(myPending[item.id])}" class="text-slate-600 hover:underline">Retirer ma demande</button>` : `<button type="button" data-act="correct" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline">Corriger</button>`) : ''}</td>` : ''}</tr>`).join('')
         : `<tr><td colspan="${colSpan}" class="py-8 text-center text-slate-400">Aucun enregistrement.</td></tr>`;
       if (key === 'payments') {
