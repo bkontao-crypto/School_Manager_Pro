@@ -238,3 +238,12 @@ Vérifié dans le navigateur (Chromium en émulation) :
 
 Non modifié : aucune anomalie trouvée sur ces modales.
 Non vérifié : modales Enseignants, Bibliothèque, Stocks ; tablette.
+
+## 15. Messages de champ : enseignants, bibliothèque, stocks (contrôle sans modification de code)
+
+Vérifié dans le navigateur (Chromium en émulation) :
+- Enseignants : « Renseignez : Prénom, Nom. » ; e-mail invalide : « E-mail : Adresse e-mail invalide ».
+- Bibliothèque : « Renseignez : Titre. ».
+- Stocks : « Renseignez : Article. » ; quantité non numérique : « Quantité : Doit être un nombre ».
+
+Non modifié : aucune anomalie trouvée. Non vérifié : ces modales sur tablette.
