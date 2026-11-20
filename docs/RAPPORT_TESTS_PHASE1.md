@@ -166,3 +166,12 @@ Règle retenue le 19/11/2026 :
 - Réponse à la limite : 403 avec `code: "quota_exceeded"`.
 - Tests : intégration 110/110, dont une réactivation refusée à la limite (compte resté inactif) et six créations simultanées avec deux places libres (exactement deux créées, quatre refusées). Unitaires 32/32.
 - Non vérifié : que ce test échoue sur l’ancien code (non relancé sur la version antérieure).
+
+## 8. Refonte UI — phase 2 (tableau de bord et affiche multi-images)
+
+Réalisé et vérifié :
+- Tableau de bord conforme à la maquette : ligne de bienvenue et date, quatre cartes (élèves, enseignants, classes, recettes) avec tendance calculée par le serveur ou « Pas de donnée », notes et présence moyenne, actions rapides, courbe des effectifs (6 mois), répartition par niveau, activités récentes, encaissements et paiements récents.
+- Affiche d’accueil en diaporama de jusqu’à 6 images (migration 034, `/api/settings/banner/images`), image principale en premier, cadrage au clic, ordre, suppression ; ancienne affiche unique conservée en repli.
+- Tests : unitaires 32/32 ; intégration 111/111 (PostgreSQL de test, migrations rejouées) ; recettes navigateur 18/18 et 9/9 ; captures contrôlées (tableau de bord, gestionnaire d’affiche).
+
+Non réalisé dans cette phase : menu à sous-sections de la maquette, responsive mobile détaillé, pages modules restantes.

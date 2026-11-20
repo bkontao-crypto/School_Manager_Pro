@@ -1748,6 +1748,63 @@ if (!TEST_URL) {
       });
     });
 
+    describe('Bannière multi-images (phase 2)', () => {
+      const mkPng = (w, h) => {
+        const b = Buffer.alloc(40);
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(b, 0);
+        b.writeUInt32BE(13, 8); b.write('IHDR', 12, 'ascii'); b.writeUInt32BE(w, 16); b.writeUInt32BE(h, 20);
+        return b;
+      };
+      const BI = '/api/settings/banner/images';
+      const up = (token, w = 1600, h = 400) => api('POST', BI, { token, raw: mkPng(w, h), headers: { 'Content-Type': 'image/png' } });
+      const list = (token) => api('GET', BI, { token });
+
+      it('ajout, limite, image principale, ordre, cadrage, suppression ; isolement entre établissements', async () => {
+        const start = (await list(tokens.adminA)).json.data.items.length;
+        // droits : seul l'administrateur écrit ; proportions contrôlées
+        assert.equal((await up(tokens.teacherA)).status, 403);
+        assert.equal((await up(tokens.adminA, 1600, 800)).status, 400);
+        // remplissage jusqu'à la limite, puis refus
+        for (let i = start; i < 6; i++) assert.equal((await up(tokens.adminA)).status, 201);
+        assert.equal((await up(tokens.adminA)).status, 400);
+        let items = (await list(tokens.adminA)).json.data.items;
+        assert.equal(items.length, 6);
+        assert.equal(items.filter((i) => i.is_primary).length, 1);
+        // isolement : l'établissement B ne voit ni la liste ni les fichiers de A
+        const itemsB = (await list(tokens.adminB)).json.data.items;
+        assert.ok(!itemsB.some((x) => items.some((y) => y.id === x.id)));
+        const own = await fetch(`${base}${items[0].url}`, { headers: { Authorization: `Bearer ${tokens.adminA}` } });
+        assert.equal(own.status, 200);
+        const foreign = await fetch(`${base}${items[0].url}`, { headers: { Authorization: `Bearer ${tokens.adminB}` } });
+        assert.equal(foreign.status, 404);
+        // image principale : une seule à la fois
+        const second = items[1].id;
+        assert.equal((await api('PUT', `${BI}/${second}`, { token: tokens.adminA, body: { is_primary: true } })).status, 200);
+        items = (await list(tokens.adminA)).json.data.items;
+        assert.equal(items.find((i) => i.is_primary).id, second);
+        assert.equal(items.filter((i) => i.is_primary).length, 1);
+        // cadrage borné à 0-100
+        assert.equal((await api('PUT', `${BI}/${second}`, { token: tokens.adminA, body: { focal_x: 120 } })).status, 400);
+        const focused = await api('PUT', `${BI}/${second}`, { token: tokens.adminA, body: { focal_x: 30, focal_y: 70 } });
+        assert.equal(focused.status, 200);
+        assert.equal(focused.json.data.focal_x, 30);
+        // ordre : liste incomplète refusée, liste complète acceptée
+        assert.equal((await api('PUT', `${BI}/order`, { token: tokens.adminA, body: { ids: [second] } })).status, 400);
+        const reversed = items.map((i) => i.id).reverse();
+        assert.equal((await api('PUT', `${BI}/order`, { token: tokens.adminA, body: { ids: reversed } })).status, 200);
+        items = (await list(tokens.adminA)).json.data.items;
+        assert.deepEqual(items.map((i) => i.id), reversed);
+        // suppression de l'image principale : la première restante devient principale
+        assert.equal((await api('DELETE', `${BI}/${second}`, { token: tokens.adminA })).status, 200);
+        items = (await list(tokens.adminA)).json.data.items;
+        assert.equal(items.length, 5);
+        assert.equal(items.filter((i) => i.is_primary).length, 1);
+        // nettoyage
+        for (const i of items) assert.equal((await api('DELETE', `${BI}/${i.id}`, { token: tokens.adminA })).status, 200);
+        assert.equal((await list(tokens.adminA)).json.data.items.length, 0);
+      });
+    });
+
     describe('Logo de l’établissement dans les bulletins (charte PDF)', () => {
       const zlib = require('node:zlib');
       const realPng = (w, h) => {

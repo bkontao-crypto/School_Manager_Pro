@@ -80,6 +80,7 @@ function buildApi() {
   scoped.use('/timetable', gateRead('timetable'), require('./modules/timetable'));
   scoped.use('/reports', gateRead('reports'), require('./modules/reports'));
   const accounts = require('./modules/settings');
+  scoped.use('/settings/banner/images', require('./modules/bannerImages'));
   scoped.use('/settings', accounts.settings);
   scoped.use('/users', accounts.users);
   api.use(scoped);

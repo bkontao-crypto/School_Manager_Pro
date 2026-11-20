@@ -259,7 +259,6 @@
                 <div class="flex items-center space-x-3 sm:space-x-4 flex-shrink-0">
                     <button id="notif-btn" type="button" aria-label="Notifications" data-module="notifications" class="relative p-2 text-slate-500 hover:text-royal-600 transition-colors rounded-full hover:bg-slate-100"><i class="fa-regular fa-bell text-lg"></i></button>
 
-                    <div class="hidden md:flex items-center space-x-2 text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/80 text-xs font-medium"><i class="fa-regular fa-calendar text-royal-600"></i><span id="today-date" class="capitalize"></span></div>
 
                     <div class="user-chip">
                         <img src="/assets/img/avatar.svg" alt="" class="w-9 h-9 rounded-full object-cover ring-2 ring-royal-100">
@@ -276,213 +275,106 @@
             <main id="main-content" class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
                 <section id="module-view" class="hidden space-y-5"></section>
 
-                <!-- Hero Banner : affiche par défaut ou affiche personnalisée de l'établissement (Paramètres > Affiche d'accueil) -->
-                <div id="hero-banner" class="relative overflow-hidden rounded-2xl bg-blue-700 text-white shadow-xl min-h-[160px] md:aspect-[4/1] flex items-center">
-                    <img id="hero-banner-img" src="/assets/img/banner-default.svg" alt="Affiche d'accueil de l'établissement" class="absolute inset-0 w-full h-full object-cover object-right">
-                    <div id="hero-banner-shade" class="absolute inset-0 pointer-events-none bg-gradient-to-r from-blue-950/75 via-blue-900/30 to-transparent"></div>
+                <!-- Affiche de l'établissement : diaporama de ses images (principale d'abord), cadrage appliqué -->
+                <div id="hero-banner" class="relative overflow-hidden rounded-2xl bg-navy-900 text-white shadow-xl min-h-[170px] md:aspect-[4/1] flex items-center">
+                    <img id="hero-banner-img" src="/assets/img/banner-default.svg" alt="Affiche d'accueil de l'établissement" class="absolute inset-0 w-full h-full object-cover">
+                    <div id="hero-banner-shade" class="absolute inset-0 pointer-events-none bg-gradient-to-r from-navy-950/80 via-navy-900/35 to-transparent"></div>
                     <div id="hero-banner-text" class="relative z-10 p-6 lg:p-10 max-w-xl">
-                        <h1 id="hero-banner-title" class="text-2xl lg:text-4xl font-extrabold tracking-tight mb-2 drop-shadow">
+                        <h1 id="hero-banner-title" class="text-2xl lg:text-4xl font-bold tracking-tight mb-2 drop-shadow">
                             Bienvenue sur <span class="text-amber-300">SCHOOL MANAGER PRO !</span>
                         </h1>
                         <p id="hero-banner-subtitle" class="text-blue-50 text-sm lg:text-base font-normal drop-shadow">
                             Gérez votre établissement scolaire en toute simplicité.
                         </p>
                     </div>
+                    <div id="hero-dots" class="absolute bottom-3 right-4 z-10 flex gap-1.5"></div>
                 </div>
 
-                <!-- 6 Metrics Stats Cards Grid -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-                    
-                    <!-- Card 1: Élèves -->
-                    <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex items-center space-x-3.5 hover:shadow-md transition-shadow">
-                        <div class="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white text-xl shadow-md shadow-blue-500/20">
-                            <i class="fa-solid fa-users"></i>
-                        </div>
-                        <div>
-                            <div id="metric-students" class="text-2xl font-bold text-slate-900 leading-none mb-1">—</div>
-                            <div class="text-xs font-medium text-slate-500">Élèves</div>
-                        </div>
-                    </div>
-
-                    <!-- Card 2: Enseignants -->
-                    <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex items-center space-x-3.5 hover:shadow-md transition-shadow">
-                        <div class="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center text-white text-xl shadow-md shadow-emerald-500/20">
-                            <i class="fa-solid fa-user-tie"></i>
-                        </div>
-                        <div>
-                            <div id="metric-teachers" class="text-2xl font-bold text-slate-900 leading-none mb-1">—</div>
-                            <div class="text-xs font-medium text-slate-500">Enseignants</div>
-                        </div>
-                    </div>
-
-                    <!-- Card 3: Classes -->
-                    <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex items-center space-x-3.5 hover:shadow-md transition-shadow">
-                        <div class="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center text-white text-xl shadow-md shadow-purple-500/20">
-                            <i class="fa-solid fa-shapes"></i>
-                        </div>
-                        <div>
-                            <div id="metric-classes" class="text-2xl font-bold text-slate-900 leading-none mb-1">—</div>
-                            <div class="text-xs font-medium text-slate-500">Classes</div>
-                        </div>
-                    </div>
-
-                    <!-- Card 4: Notes saisies -->
-                    <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex items-center space-x-3.5 hover:shadow-md transition-shadow">
-                        <div class="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center text-white text-xl shadow-md shadow-amber-500/20 font-bold">
-                            A+
-                        </div>
-                        <div>
-                            <div id="metric-grades" class="text-2xl font-bold text-slate-900 leading-none mb-1">—</div>
-                            <div class="text-xs font-medium text-slate-500">Notes saisies</div>
-                        </div>
-                    </div>
-
-                    <!-- Card 5: Présence moyenne -->
-                    <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex items-center space-x-3.5 hover:shadow-md transition-shadow">
-                        <div class="w-12 h-12 bg-teal-500 rounded-xl flex items-center justify-center text-white text-xl shadow-md shadow-teal-500/20">
-                            <i class="fa-regular fa-calendar-check"></i>
-                        </div>
-                        <div>
-                            <div id="metric-attendance" class="text-2xl font-bold text-slate-900 leading-none mb-1">—</div>
-                            <div class="text-xs font-medium text-slate-500">Présence moyenne</div>
-                        </div>
-                    </div>
-
-                    <!-- Card 6: Paiements ce mois -->
-                    <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex items-center space-x-3.5 hover:shadow-md transition-shadow">
-                        <div class="w-12 h-12 bg-lime-500 rounded-xl flex items-center justify-center text-white text-xl shadow-md shadow-lime-500/20">
-                            <i class="fa-solid fa-sack-dollar"></i>
-                        </div>
-                        <div>
-                            <div id="metric-payments" class="text-lg font-bold text-slate-900 leading-none mb-1">—</div>
-                            <div class="text-xs font-medium text-slate-500">Paiements ce mois</div>
-                        </div>
-                    </div>
-
+                <!-- Ligne de bienvenue + date -->
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <h2 class="text-xl font-bold text-ink flex items-center gap-2"><i class="fa-regular fa-hand text-amber-400"></i>Bienvenue sur votre portail de gestion scolaire !</h2>
+                    <div class="flex items-center gap-2 text-sm font-medium text-slate-700 bg-white px-3.5 py-2 rounded-xl border border-slate-200 shadow-sm"><i class="fa-regular fa-calendar text-royal-600"></i><span id="today-date" class="capitalize"></span></div>
                 </div>
 
-                <!-- Middle Row Section -->
-                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                    
-                    <!-- Chart: Encaissements des 6 derniers mois -->
-                    <div class="lg:col-span-5 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="flex items-center space-x-2">
-                                <i class="fa-solid fa-chart-simple text-blue-600"></i>
-                                <h3 class="font-bold text-slate-800 text-sm">Encaissements des 6 derniers mois</h3>
-                            </div>
-                            
-                        </div>
-
-                        <div id="payments-chart" class="relative w-full h-56" role="img" aria-label="Encaissements par mois"><p class="h-full flex items-center justify-center text-sm text-slate-400">Chargement…</p></div>
+                <!-- Cartes statistiques (maquette) : valeur, libellé et tendance calculée par le serveur ou « Pas de donnée » -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+                    <div class="stat-card relative blue flex items-center gap-4">
+                        <div class="w-14 h-14 rounded-xl bg-white/20 flex items-center justify-center text-2xl shrink-0"><i class="fa-solid fa-user-group"></i></div>
+                        <div class="min-w-0 flex-1 pr-16"><p id="metric-students" class="text-3xl font-bold leading-none">—</p><p class="text-sm mt-1.5 opacity-95">Élèves inscrits</p></div>
+                        <p id="trend-students" class="absolute top-3 right-3 text-xs font-semibold"></p>
                     </div>
+                    <div class="stat-card relative green flex items-center gap-4">
+                        <div class="w-14 h-14 rounded-xl bg-white/20 flex items-center justify-center text-2xl shrink-0"><i class="fa-solid fa-chalkboard-user"></i></div>
+                        <div class="min-w-0 flex-1 pr-16"><p id="metric-teachers" class="text-3xl font-bold leading-none">—</p><p class="text-sm mt-1.5 opacity-95">Enseignants</p></div>
+                        <p id="trend-teachers" class="absolute top-3 right-3 text-xs font-semibold"></p>
+                    </div>
+                    <div class="stat-card relative orange flex items-center gap-4">
+                        <div class="w-14 h-14 rounded-xl bg-white/20 flex items-center justify-center text-2xl shrink-0"><i class="fa-solid fa-table-cells-large"></i></div>
+                        <div class="min-w-0 flex-1 pr-16"><p id="metric-classes" class="text-3xl font-bold leading-none">—</p><p class="text-sm mt-1.5 opacity-95">Classes</p></div>
+                        <p id="trend-classes" class="absolute top-3 right-3 text-xs font-semibold"></p>
+                    </div>
+                    <div class="stat-card relative violet flex items-center gap-4">
+                        <div class="w-14 h-14 rounded-xl bg-white/20 flex items-center justify-center text-2xl shrink-0"><i class="fa-solid fa-sack-dollar"></i></div>
+                        <div class="min-w-0 flex-1 pr-16"><p id="metric-payments" class="text-2xl font-bold leading-none whitespace-nowrap">—</p><p class="text-sm mt-1.5 opacity-95">Recettes ce mois</p></div>
+                        <p id="trend-payments" class="absolute top-3 right-3 text-xs font-semibold"></p>
+                    </div>
+                </div>
+                <p class="text-sm text-slate-600 -mt-3">Notes saisies : <strong id="metric-grades" class="text-ink">—</strong><span class="mx-2 text-slate-300">|</span>Présence moyenne : <strong id="metric-attendance" class="text-ink">—</strong> <span id="trend-attendance" class="text-xs font-semibold"></span></p>
 
-                    <!-- Table: Paiements récents -->
-                    <div class="lg:col-span-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="flex items-center space-x-2">
-                                <i class="fa-solid fa-wallet text-blue-600"></i>
-                                <h3 class="font-bold text-slate-800 text-sm">Paiements récents</h3>
-                            </div>
-                            <a href="#" data-module="payments" class="text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center">
-                                Voir tout <i class="fa-solid fa-arrow-right text-[10px] ml-1"></i>
-                            </a>
+                <!-- Actions rapides (maquette) -->
+                <div class="panel p-5">
+                    <h3 class="font-bold text-ink flex items-center gap-2 mb-4"><i class="fa-solid fa-bolt text-amber-400"></i>Actions rapides</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+                        <button type="button" data-action="add-student" class="group flex flex-col items-center text-center gap-2 p-4 rounded-xl bg-blue-50 hover:bg-blue-100 text-royal-600 transition-colors"><span class="w-11 h-11 rounded-xl bg-royal-600 text-white flex items-center justify-center"><i class="fa-solid fa-user-plus"></i></span><span class="text-sm font-semibold text-ink">Inscrire un élève</span></button>
+                        <button type="button" data-action="timetable" class="group flex flex-col items-center text-center gap-2 p-4 rounded-xl bg-emerald-50 hover:bg-emerald-100 transition-colors"><span class="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center"><i class="fa-regular fa-calendar-days"></i></span><span class="text-sm font-semibold text-ink">Planifier une séance</span></button>
+                        <button type="button" data-action="report-card" class="group flex flex-col items-center text-center gap-2 p-4 rounded-xl bg-amber-50 hover:bg-amber-100 transition-colors"><span class="w-11 h-11 rounded-xl bg-amber-500 text-white flex items-center justify-center"><i class="fa-regular fa-file-lines"></i></span><span class="text-sm font-semibold text-ink">Générer un bulletin</span></button>
+                        <button type="button" data-action="add-payment" class="group flex flex-col items-center text-center gap-2 p-4 rounded-xl bg-violet-50 hover:bg-violet-100 transition-colors"><span class="w-11 h-11 rounded-xl bg-violet-600 text-white flex items-center justify-center"><i class="fa-regular fa-credit-card"></i></span><span class="text-sm font-semibold text-ink">Enregistrer un paiement</span></button>
+                        <button type="button" data-action="stocks" class="group flex flex-col items-center text-center gap-2 p-4 rounded-xl bg-cyan-50 hover:bg-cyan-100 transition-colors"><span class="w-11 h-11 rounded-xl bg-cyan-600 text-white flex items-center justify-center"><i class="fa-solid fa-box-open"></i></span><span class="text-sm font-semibold text-ink">Gérer le stock</span></button>
+                        <button type="button" data-action="reports" class="group flex flex-col items-center text-center gap-2 p-4 rounded-xl bg-sky-50 hover:bg-sky-100 transition-colors"><span class="w-11 h-11 rounded-xl bg-sky-600 text-white flex items-center justify-center"><i class="fa-solid fa-chart-column"></i></span><span class="text-sm font-semibold text-ink">Voir les rapports</span></button>
+                    </div>
+                </div>
+
+                <!-- Effectifs, répartition par niveau, activités récentes -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                    <div class="panel p-5 lg:col-span-5">
+                        <h3 class="font-bold text-ink mb-3 flex items-center gap-2"><i class="fa-solid fa-chart-line text-royal-600"></i>Évolution des effectifs <span class="text-xs font-normal text-slate-500">(6 derniers mois)</span></h3>
+                        <div id="enrolment-chart" class="w-full h-56" role="img" aria-label="Évolution des effectifs"></div>
+                    </div>
+                    <div class="panel p-5 lg:col-span-4">
+                        <h3 class="font-bold text-ink mb-3 flex items-center gap-2"><i class="fa-solid fa-chart-pie text-royal-600"></i>Répartition par niveau</h3>
+                        <div class="flex items-center gap-4">
+                            <div id="level-chart" class="w-32 h-32 shrink-0" role="img" aria-label="Répartition des élèves par niveau"></div>
+                            <ul id="level-legend" class="text-sm space-y-2 min-w-0 flex-1"></ul>
                         </div>
+                    </div>
+                    <div class="panel p-5 lg:col-span-3">
+                        <h3 class="font-bold text-ink mb-3 flex items-center gap-2"><i class="fa-regular fa-bell text-royal-600"></i>Activités récentes</h3>
+                        <div id="recent-activities" class="space-y-3 text-sm text-slate-600"><p>Chargement…</p></div>
+                    </div>
+                </div>
 
+                <!-- Encaissements et paiements récents (fonctions existantes conservées) -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                    <div class="panel p-5 lg:col-span-5 flex flex-col">
+                        <h3 class="font-bold text-ink mb-3 flex items-center gap-2"><i class="fa-solid fa-chart-simple text-royal-600"></i>Encaissements des 6 derniers mois</h3>
+                        <div id="payments-chart" class="relative w-full h-56" role="img" aria-label="Encaissements par mois"></div>
+                    </div>
+                    <div class="panel p-5 lg:col-span-7">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-bold text-ink flex items-center gap-2"><i class="fa-solid fa-wallet text-royal-600"></i>Paiements récents</h3>
+                            <a href="#" data-module="payments" class="text-xs text-royal-600 hover:text-royal-500 font-semibold flex items-center">Voir tout <i class="fa-solid fa-arrow-right text-[10px] ml-1"></i></a>
+                        </div>
                         <div class="overflow-x-auto">
                             <table class="w-full text-left border-collapse">
                                 <thead>
                                     <tr class="text-[11px] font-semibold text-slate-400 border-b border-slate-100 uppercase tracking-wider">
-                                        <th class="pb-2">#</th>
-                                        <th class="pb-2">Élève</th>
-                                        <th class="pb-2">Montant</th>
-                                        <th class="pb-2">Date</th>
-                                        <th class="pb-2 text-right">Statut</th>
+                                        <th class="pb-2">#</th><th class="pb-2">Élève</th><th class="pb-2">Montant</th><th class="pb-2">Date</th><th class="pb-2 text-right">Statut</th>
                                     </tr>
                                 </thead>
-                                <tbody id="recent-payments" class="text-xs divide-y divide-slate-100 font-medium text-slate-700"><tr><td colspan="5" class="py-8 text-center text-slate-400">Chargement des paiements depuis l’API…</td></tr></tbody>
+                                <tbody id="recent-payments" class="text-xs divide-y divide-slate-100 font-medium text-slate-700"><tr><td colspan="5" class="py-8 text-center text-slate-400">Chargement des paiements…</td></tr></tbody>
                             </table>
                         </div>
                     </div>
-
-                    <!-- Actions rapides -->
-                    <div class="lg:col-span-3 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
-                        <div class="flex items-center space-x-2 mb-3">
-                            <i class="fa-solid fa-bolt text-amber-500"></i>
-                            <h3 class="font-bold text-slate-800 text-sm">Actions rapides</h3>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-3 flex-1">
-                            <!-- Action 1 -->
-                            <button type="button" data-action="add-student" class="bg-blue-50/60 hover:bg-blue-100/80 text-blue-700 p-3 rounded-xl flex flex-col items-center justify-center text-center transition-all group">
-                                <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mb-1.5 text-blue-600 group-hover:scale-110 transition-transform">
-                                    <i class="fa-solid fa-user-plus text-sm"></i>
-                                </div>
-                                <span class="text-[11px] font-semibold leading-tight">Ajouter un élève</span>
-                            </button>
-
-                            <!-- Action 2 -->
-                            <button type="button" data-action="assign-class" class="bg-emerald-50/60 hover:bg-emerald-100/80 text-emerald-700 p-3 rounded-xl flex flex-col items-center justify-center text-center transition-all group">
-                                <div class="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center mb-1.5 text-emerald-600 group-hover:scale-110 transition-transform">
-                                    <i class="fa-solid fa-table-cells text-sm"></i>
-                                </div>
-                                <span class="text-[11px] font-semibold leading-tight">Attribuer une classe</span>
-                            </button>
-
-                            <!-- Action 3 -->
-                            <button type="button" data-action="enter-grades" class="bg-amber-50/60 hover:bg-amber-100/80 text-amber-700 p-3 rounded-xl flex flex-col items-center justify-center text-center transition-all group">
-                                <div class="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center mb-1.5 text-amber-600 group-hover:scale-110 transition-transform font-bold text-xs">
-                                    A+
-                                </div>
-                                <span class="text-[11px] font-semibold leading-tight">Saisir les notes</span>
-                            </button>
-
-                            <!-- Action 4 -->
-                            <button type="button" data-action="add-payment" class="bg-teal-50/60 hover:bg-teal-100/80 text-teal-700 p-3 rounded-xl flex flex-col items-center justify-center text-center transition-all group">
-                                <div class="w-8 h-8 bg-teal-100 rounded-lg flex items-center justify-center mb-1.5 text-teal-600 group-hover:scale-110 transition-transform">
-                                    <i class="fa-regular fa-credit-card text-sm"></i>
-                                </div>
-                                <span class="text-[11px] font-semibold leading-tight">Enregistrer un paiement</span>
-                            </button>
-
-                            <!-- Action 5 -->
-                            <button type="button" data-action="message" class="bg-indigo-50/60 hover:bg-indigo-100/80 text-indigo-700 p-3 rounded-xl flex flex-col items-center justify-center text-center transition-all group">
-                                <div class="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center mb-1.5 text-indigo-600 group-hover:scale-110 transition-transform">
-                                    <i class="fa-regular fa-paper-plane text-sm"></i>
-                                </div>
-                                <span class="text-[11px] font-semibold leading-tight">Envoyer un message</span>
-                            </button>
-
-                            <!-- Action 6 -->
-                            <button type="button" data-action="reports" class="bg-slate-100 hover:bg-slate-200/80 text-slate-700 p-3 rounded-xl flex flex-col items-center justify-center text-center transition-all group">
-                                <div class="w-8 h-8 bg-slate-200 rounded-lg flex items-center justify-center mb-1.5 text-slate-600 group-hover:scale-110 transition-transform">
-                                    <i class="fa-solid fa-chart-pie text-sm"></i>
-                                </div>
-                                <span class="text-[11px] font-semibold leading-tight">Voir les rapports</span>
-                            </button>
-                        </div>
-                    </div>
-
-                </div>
-
-                <!-- Bottom Row Section -->
-                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                    
-                    <!-- Activités récentes -->
-                    <div class="lg:col-span-12 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
-                        <div>
-                            <div class="flex items-center justify-between mb-4">
-                                <div class="flex items-center space-x-2">
-                                    <i class="fa-regular fa-clock text-blue-600"></i>
-                                    <h3 class="font-bold text-slate-800 text-sm">Activités récentes</h3>
-                                </div>
-                                
-                            </div>
-
-                            <div id="recent-activities" class="space-y-3.5 text-xs text-slate-500"><p>Chargement…</p></div>
-                        </div>
-                    </div>
-
                 </div>
 
             </main>
