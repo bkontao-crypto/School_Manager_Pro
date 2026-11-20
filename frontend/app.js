@@ -212,7 +212,14 @@ function formModal({ title, fields, values = {}, submit = 'Enregistrer', onSubmi
     if (missing.length) { $('modal-error').textContent = `Renseignez : ${missing.join(', ')}.`; return; }
     btn.disabled = true;
     try { await onSubmit(data); closeModal(true); }
-    catch (e) { $('modal-error').textContent = e.message; btn.disabled = false; }
+    catch (e) {
+      // Erreurs de champ : chaque message est rattaché au libellé du champ fautif.
+      const named = Array.isArray(e.errors) && e.errors.length
+        ? e.errors.map((x) => { const f = fields.find((ff) => ff.name === x.field); return x.field ? `${f ? f.label : x.field} : ${x.message}` : x.message; })
+        : [e.message];
+      $('modal-error').textContent = named.join(' · ');
+      btn.disabled = false;
+    }
   });
   return p;
 }

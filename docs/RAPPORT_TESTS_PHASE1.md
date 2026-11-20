@@ -218,3 +218,13 @@ Réalisé et vérifié :
 - Tests : unitaires 32/32 ; intégration 111/111 ; recettes navigateur 18/18 et 9/9 (base réinitialisée).
 
 Non vérifié : modale de modification ; tablettes réelles (seul le moteur Chromium en émulation a été utilisé).
+
+## 13. Refonte UI — messages de champ et modale de modification
+
+Réalisé et vérifié (navigateur, Chromium en émulation) :
+- Erreurs serveur de champ : chaque message est rattaché au libellé du champ fautif (« Montant (F CFA) : Doit être un nombre »). Aucune modification de l'API : le nom du champ est déjà fourni par le serveur et traduit côté interface.
+- Champs obligatoires : « Renseignez : Élève, Montant (F CFA). » avant tout envoi.
+- Modale « Modifier l'élève » : pré-remplie, champ obligatoire vide refusé avec message, enregistrement valide ferme la modale.
+- Tests : unitaires 32/32 ; intégration 111/111 ; recettes navigateur 18/18 et 9/9 (base réinitialisée).
+
+Non vérifié : messages serveur dans toutes les modales (seuls élève et paiement ont été contrôlés) ; modification sur tablette.
