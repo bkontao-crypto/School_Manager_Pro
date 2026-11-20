@@ -196,3 +196,14 @@ Réalisé et vérifié :
 - Tests : unitaires 32/32 ; intégration 111/111 ; recettes navigateur 18/18 et 9/9 (base réinitialisée).
 
 Non vérifié : écrans de formulaire (modales) et pages notes / paiements capturées une à une ; tablette avec d'autres modules.
+
+## 11. Refonte UI — phase 5 (contrôle des formulaires, notes et paiements)
+
+Vérifié visuellement (captures sur ordinateur 1440 px) :
+- Modale « Ajouter un élève » : champs, libellés obligatoires, boutons Annuler / Enregistrer alignés sur la maquette.
+- Modale « Ajouter un paiement » : fonctionnelle, mais deux champs élève à la suite (recherche puis liste) : à simplifier.
+- Page Notes : statuts Saisie / Validée / Annulée et actions par ligne cohérents.
+
+Vérifié fonctionnellement (non modifié en phase 5) : parcours de notes et de paiements couverts par les recettes navigateur 18/18 et les tests d'intégration 111/111 (rejoués sur base réinitialisée).
+
+Non vérifié : messages d'erreur de validation affichés dans les modales ; modale de modification ; tablette sur les modales.
