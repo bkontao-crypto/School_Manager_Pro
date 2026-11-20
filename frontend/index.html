@@ -48,130 +48,135 @@
                     </div>
                 </a>
 
-                <a href="#" data-module="portal" class="nav-link hidden">
+<a href="#" data-module="portal" class="nav-link hidden">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-children w-5 text-center text-sm"></i>
                         <span class="text-sm">Mes enfants</span>
                     </div>
                 </a>
 
-                <a href="#" data-module="students" class="nav-link">
-                    <div class="flex items-center space-x-3">
-                        <i class="fa-solid fa-user-group w-5 text-center text-sm"></i>
-                        <span class="text-sm">Élèves</span>
-                    </div>
-                </a>
-
-                <a href="#" data-module="teachers" class="nav-link">
-                    <div class="flex items-center space-x-3">
-                        <i class="fa-solid fa-chalkboard-user w-5 text-center text-sm"></i>
-                        <span class="text-sm">Enseignants</span>
-                    </div>
-                </a>
-
-                <a href="#" data-module="classes" class="nav-link">
-                    <div class="flex items-center space-x-3">
-                        <i class="fa-solid fa-border-all w-5 text-center text-sm"></i>
+                <div class="nav-group-wrap" data-group-wrap>
+                    <button type="button" data-group="etab" aria-expanded="false" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white font-medium transition-colors">
+                        <span class="flex items-center space-x-3"><i class="fa-solid fa-building-columns w-5 text-center text-sm"></i><span class="text-sm">Établissement</span></span>
+                        <i class="fa-solid fa-chevron-right text-[10px] transition-transform nav-chevron"></i>
+                    </button>
+                    <div class="nav-panel hidden space-y-0.5 mt-0.5 mb-1">
+                    <a href="#" data-module="classes" class="nav-link nav-sub flex items-center space-x-3 pl-11 pr-3.5 py-2 rounded-lg">
                         <span class="text-sm">Classes</span>
-                    </div>
-                </a>
-
-                <a href="#" data-module="timetable" class="nav-link">
-                    <div class="flex items-center space-x-3">
-                        <i class="fa-solid fa-calendar-days w-5 text-center text-sm"></i>
+                    </a>
+                    <a href="#" data-module="timetable" class="nav-link nav-sub flex items-center space-x-3 pl-11 pr-3.5 py-2 rounded-lg">
                         <span class="text-sm">Emploi du temps</span>
-                    </div>
-                </a>
-                <a href="#" data-module="grades" class="nav-link">
-                    <div class="flex items-center space-x-3">
-                        <i class="fa-solid fa-file-pen w-5 text-center text-sm"></i>
-                        <span class="text-sm">Notes</span>
-                    </div>
-                </a>
-
-                <a href="#" data-module="attendances" class="nav-link">
-                    <div class="flex items-center space-x-3">
-                        <i class="fa-solid fa-clipboard-check w-5 text-center text-sm"></i>
-                        <span class="text-sm">Présences</span>
-                    </div>
-                </a>
-
-                <a href="#" data-module="payments" class="nav-link">
-                    <div class="flex items-center space-x-3">
-                        <i class="fa-solid fa-wallet w-5 text-center text-sm"></i>
-                        <span class="text-sm">Paiements</span>
-                    </div>
-                </a>
-
-                <a href="#" data-module="broadcasts" class="nav-link">
-                    <div class="flex items-center space-x-3">
-                        <i class="fa-solid fa-bullhorn w-5 text-center text-sm"></i>
-                        <span class="text-sm">Communication</span>
-                    </div>
-                </a>
-
-                <a href="#" data-module="messages" class="nav-link">
-                    <div class="flex items-center space-x-3">
-                        <i class="fa-solid fa-envelope w-5 text-center text-sm"></i>
-                        <span class="text-sm">Messages</span>
-                    </div>
-                    
-                </a>
-
-                <a href="#" data-module="library" class="nav-link">
-                    <div class="flex items-center space-x-3">
-                        <i class="fa-solid fa-book w-5 text-center text-sm"></i>
-                        <span class="text-sm">Bibliothèque</span>
-                    </div>
-                </a>
-
-                <a href="#" data-module="canteen" class="nav-link">
-                    <div class="flex items-center space-x-3">
-                        <i class="fa-solid fa-utensils w-5 text-center text-sm"></i>
-                        <span class="text-sm">Cantine</span>
-                    </div>
-                </a>
-
-                <a href="#" data-module="transport" class="nav-link">
-                    <div class="flex items-center space-x-3">
-                        <i class="fa-solid fa-bus w-5 text-center text-sm"></i>
-                        <span class="text-sm">Transport</span>
-                    </div>
-                </a>
-
-                <a href="#" data-module="hr" class="nav-link">
-                    <div class="flex items-center space-x-3">
-                        <i class="fa-solid fa-id-badge w-5 text-center text-sm"></i>
-                        <span class="text-sm">Personnel (RH)</span>
-                    </div>
-                </a>
-                <a href="#" data-module="documents" class="nav-link">
-                    <div class="flex items-center space-x-3">
-                        <i class="fa-solid fa-file-lines w-5 text-center text-sm"></i>
+                    </a>
+                    <a href="#" data-module="documents" class="nav-link nav-sub flex items-center space-x-3 pl-11 pr-3.5 py-2 rounded-lg">
                         <span class="text-sm">Documents</span>
+                    </a>
                     </div>
-                </a>
-                <a href="#" data-module="stocks" class="nav-link">
-                    <div class="flex items-center space-x-3">
-                        <i class="fa-solid fa-boxes-stacked w-5 text-center text-sm"></i>
+                </div>
+                <div class="nav-group-wrap" data-group-wrap>
+                    <button type="button" data-group="users" aria-expanded="false" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white font-medium transition-colors">
+                        <span class="flex items-center space-x-3"><i class="fa-solid fa-user-group w-5 text-center text-sm"></i><span class="text-sm">Utilisateurs</span></span>
+                        <i class="fa-solid fa-chevron-right text-[10px] transition-transform nav-chevron"></i>
+                    </button>
+                    <div class="nav-panel hidden space-y-0.5 mt-0.5 mb-1">
+                    <a href="#" data-module="students" class="nav-link nav-sub flex items-center space-x-3 pl-11 pr-3.5 py-2 rounded-lg">
+                        <span class="text-sm">Élèves</span>
+                    </a>
+                    <a href="#" data-module="teachers" class="nav-link nav-sub flex items-center space-x-3 pl-11 pr-3.5 py-2 rounded-lg">
+                        <span class="text-sm">Enseignants</span>
+                    </a>
+                    <a href="#" data-module="hr" class="nav-link nav-sub flex items-center space-x-3 pl-11 pr-3.5 py-2 rounded-lg">
+                        <span class="text-sm">Personnel (RH)</span>
+                    </a>
+                    </div>
+                </div>
+                <div class="nav-group-wrap" data-group-wrap>
+                    <button type="button" data-group="acad" aria-expanded="false" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white font-medium transition-colors">
+                        <span class="flex items-center space-x-3"><i class="fa-solid fa-graduation-cap w-5 text-center text-sm"></i><span class="text-sm">Gestion académique</span></span>
+                        <i class="fa-solid fa-chevron-right text-[10px] transition-transform nav-chevron"></i>
+                    </button>
+                    <div class="nav-panel hidden space-y-0.5 mt-0.5 mb-1">
+                    <a href="#" data-module="grades" class="nav-link nav-sub flex items-center space-x-3 pl-11 pr-3.5 py-2 rounded-lg">
+                        <span class="text-sm">Notes</span>
+                    </a>
+                    <a href="#" data-module="attendances" class="nav-link nav-sub flex items-center space-x-3 pl-11 pr-3.5 py-2 rounded-lg">
+                        <span class="text-sm">Présences</span>
+                    </a>
+                    </div>
+                </div>
+                <div class="nav-group-wrap" data-group-wrap>
+                    <button type="button" data-group="fin" aria-expanded="false" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white font-medium transition-colors">
+                        <span class="flex items-center space-x-3"><i class="fa-solid fa-sack-dollar w-5 text-center text-sm"></i><span class="text-sm">Finances</span></span>
+                        <i class="fa-solid fa-chevron-right text-[10px] transition-transform nav-chevron"></i>
+                    </button>
+                    <div class="nav-panel hidden space-y-0.5 mt-0.5 mb-1">
+                    <a href="#" data-module="payments" class="nav-link nav-sub flex items-center space-x-3 pl-11 pr-3.5 py-2 rounded-lg">
+                        <span class="text-sm">Paiements</span>
+                    </a>
+                    </div>
+                </div>
+                <div class="nav-group-wrap" data-group-wrap>
+                    <button type="button" data-group="stock" aria-expanded="false" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white font-medium transition-colors">
+                        <span class="flex items-center space-x-3"><i class="fa-solid fa-box-open w-5 text-center text-sm"></i><span class="text-sm">Stock & Matériel</span></span>
+                        <i class="fa-solid fa-chevron-right text-[10px] transition-transform nav-chevron"></i>
+                    </button>
+                    <div class="nav-panel hidden space-y-0.5 mt-0.5 mb-1">
+                    <a href="#" data-module="stocks" class="nav-link nav-sub flex items-center space-x-3 pl-11 pr-3.5 py-2 rounded-lg">
                         <span class="text-sm">Stocks</span>
+                    </a>
+                    <a href="#" data-module="library" class="nav-link nav-sub flex items-center space-x-3 pl-11 pr-3.5 py-2 rounded-lg">
+                        <span class="text-sm">Bibliothèque</span>
+                    </a>
+                    <a href="#" data-module="canteen" class="nav-link nav-sub flex items-center space-x-3 pl-11 pr-3.5 py-2 rounded-lg">
+                        <span class="text-sm">Cantine</span>
+                    </a>
+                    <a href="#" data-module="transport" class="nav-link nav-sub flex items-center space-x-3 pl-11 pr-3.5 py-2 rounded-lg">
+                        <span class="text-sm">Transport</span>
+                    </a>
                     </div>
-                </a>
-                <a href="#" data-module="reports" class="nav-link">
-                    <div class="flex items-center space-x-3">
-                        <i class="fa-solid fa-chart-column w-5 text-center text-sm"></i>
+                </div>
+                <div class="nav-group-wrap" data-group-wrap>
+                    <button type="button" data-group="comm" aria-expanded="false" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white font-medium transition-colors">
+                        <span class="flex items-center space-x-3"><i class="fa-solid fa-comment-dots w-5 text-center text-sm"></i><span class="text-sm">Communications</span></span>
+                        <i class="fa-solid fa-chevron-right text-[10px] transition-transform nav-chevron"></i>
+                    </button>
+                    <div class="nav-panel hidden space-y-0.5 mt-0.5 mb-1">
+                    <a href="#" data-module="messages" class="nav-link nav-sub flex items-center space-x-3 pl-11 pr-3.5 py-2 rounded-lg">
+                        <span class="text-sm">Messages</span>
+                    </a>
+                    <a href="#" data-module="broadcasts" class="nav-link nav-sub flex items-center space-x-3 pl-11 pr-3.5 py-2 rounded-lg">
+                        <span class="text-sm">Communication</span>
+                    </a>
+                    </div>
+                </div>
+                <div class="nav-group-wrap" data-group-wrap>
+                    <button type="button" data-group="rep" aria-expanded="false" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white font-medium transition-colors">
+                        <span class="flex items-center space-x-3"><i class="fa-solid fa-chart-column w-5 text-center text-sm"></i><span class="text-sm">Rapports</span></span>
+                        <i class="fa-solid fa-chevron-right text-[10px] transition-transform nav-chevron"></i>
+                    </button>
+                    <div class="nav-panel hidden space-y-0.5 mt-0.5 mb-1">
+                    <a href="#" data-module="reports" class="nav-link nav-sub flex items-center space-x-3 pl-11 pr-3.5 py-2 rounded-lg">
                         <span class="text-sm">Rapports</span>
+                    </a>
                     </div>
-                </a>
-
-                <a href="#" data-module="settings" class="nav-link">
-                    <div class="flex items-center space-x-3">
-                        <i class="fa-solid fa-gear w-5 text-center text-sm"></i>
-                        <span class="text-sm">Paramètres</span>
+                </div>
+                <div class="nav-group-wrap" data-group-wrap>
+                    <button type="button" data-group="set" aria-expanded="false" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white font-medium transition-colors">
+                        <span class="flex items-center space-x-3"><i class="fa-solid fa-gear w-5 text-center text-sm"></i><span class="text-sm">Paramètres</span></span>
+                        <i class="fa-solid fa-chevron-right text-[10px] transition-transform nav-chevron"></i>
+                    </button>
+                    <div class="nav-panel hidden space-y-0.5 mt-0.5 mb-1">
+                    <a href="#" data-module="settings" class="nav-link nav-sub flex items-center space-x-3 pl-11 pr-3.5 py-2 rounded-lg">
+                        <span class="text-sm">Configuration</span>
+                    </a>
                     </div>
-                </a>
+                </div>
 
-                <p id="nav-platform-title" class="hidden px-3.5 pt-1 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Plateforme</p>
+                <div class="flex items-center justify-between px-3.5 py-2.5 rounded-lg text-slate-500 cursor-default" aria-disabled="true">
+                    <span class="flex items-center space-x-3"><i class="fa-solid fa-circle-question w-5 text-center text-sm"></i><span class="text-sm">Aide &amp; Support</span></span>
+                    <span class="text-[10px] font-semibold uppercase tracking-wide text-amber-300/80">À venir</span>
+                </div>
+
+<p id="nav-platform-title" class="hidden px-3.5 pt-1 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Plateforme</p>
                 <a href="#" data-module="platform-overview" class="nav-link hidden">
                     <div class="flex items-center space-x-3">
                         <i class="fa-solid fa-gauge-high w-5 text-center text-sm"></i>
@@ -220,6 +225,8 @@
                         <span class="text-sm">Mon compte</span>
                     </div>
                 </a>
+
+
 
                 <div class="sidebar-promo" aria-hidden="true">
                     <i class="fa-solid fa-handshake-angle text-2xl"></i>
@@ -278,7 +285,7 @@
                 <!-- Affiche de l'établissement : diaporama de ses images (principale d'abord), cadrage appliqué -->
                 <div id="hero-banner" class="relative overflow-hidden rounded-2xl bg-navy-900 text-white shadow-xl min-h-[170px] md:aspect-[4/1] flex items-center">
                     <img id="hero-banner-img" src="/assets/img/banner-default.svg" alt="Affiche d'accueil de l'établissement" class="absolute inset-0 w-full h-full object-cover">
-                    <div id="hero-banner-shade" class="absolute inset-0 pointer-events-none bg-gradient-to-r from-navy-950/80 via-navy-900/35 to-transparent"></div>
+                    <div id="hero-banner-shade" class="absolute inset-0 pointer-events-none bg-navy-950/30 bg-gradient-to-r from-navy-950/85 via-navy-900/45 to-transparent"></div>
                     <div id="hero-banner-text" class="relative z-10 p-6 lg:p-10 max-w-xl">
                         <h1 id="hero-banner-title" class="text-2xl lg:text-4xl font-bold tracking-tight mb-2 drop-shadow">
                             Bienvenue sur <span class="text-amber-300">SCHOOL MANAGER PRO !</span>

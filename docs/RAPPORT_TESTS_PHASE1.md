@@ -175,3 +175,15 @@ Réalisé et vérifié :
 - Tests : unitaires 32/32 ; intégration 111/111 (PostgreSQL de test, migrations rejouées) ; recettes navigateur 18/18 et 9/9 ; captures contrôlées (tableau de bord, gestionnaire d’affiche).
 
 Non réalisé dans cette phase : menu à sous-sections de la maquette, responsive mobile détaillé, pages modules restantes.
+
+## 9. Refonte UI — phase 3 (menu à sous-sections et mobile)
+
+Réalisé et vérifié :
+- Menu latéral selon la maquette : rubriques repliables (Établissement, Utilisateurs, Gestion académique, Finances, Stock & Matériel, Communications, Rapports, Paramètres), groupe actif ouvert automatiquement, groupes sans module autorisé masqués.
+- Rattachement des modules aux rubriques (décision de regroupement) : Établissement = Classes, Emploi du temps, Documents ; Utilisateurs = Élèves, Enseignants, Personnel (RH) ; Gestion académique = Notes, Présences ; Finances = Paiements ; Stock & Matériel = Stocks, Bibliothèque, Cantine, Transport ; Communications = Messages, Communication ; Rapports ; Paramètres = Configuration.
+- « Aide & Support » affiché comme « À venir », non cliquable (aucun contenu réel à ce stade).
+- Vérification : tous les identifiants de module du menu précédent sont conservés (comparaison avec HEAD).
+- Mobile (390 px) : aucun débordement horizontal, menu en panneau fonctionnel, contraste de l'affiche renforcé.
+- Tests : unitaires 32/32 ; intégration 111/111 ; recettes navigateur 18/18 et 9/9 après réinitialisation de la base de test. Les recettes ouvrent désormais la rubrique avant de cliquer sur un module (`navTo`).
+
+Non vérifié : tablette (768–1023 px) et navigateur autre que Chromium.

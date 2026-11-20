@@ -267,7 +267,26 @@ function setActiveNav(key) {
     a.classList.toggle('is-active', on);
     if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   });
+  document.querySelectorAll('[data-group-wrap]').forEach((wrap) => { if (wrap.querySelector('a.is-active')) setNavGroupOpen(wrap, true); });
 }
+
+// Menu à sous-sections : ouverture par groupe, groupe actif ouvert automatiquement, groupes vides masqués.
+function setNavGroupOpen(wrap, open) {
+  const btn = wrap.querySelector('[data-group]'); const panel = wrap.querySelector('.nav-panel'); const chev = wrap.querySelector('.nav-chevron');
+  btn.setAttribute('aria-expanded', String(open)); panel.classList.toggle('hidden', !open); chev.classList.toggle('rotate-90', open);
+}
+function syncNavGroups() {
+  document.querySelectorAll('[data-group-wrap]').forEach((wrap) => {
+    const visible = [...wrap.querySelectorAll('[data-module]')].some((a) => !a.classList.contains('hidden'));
+    wrap.classList.toggle('hidden', !visible);
+  });
+}
+document.querySelectorAll('[data-group]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const wrap = btn.closest('[data-group-wrap]');
+    setNavGroupOpen(wrap, btn.getAttribute('aria-expanded') !== 'true');
+  });
+});
 
 function barChart(series) {
   const max = Math.max(1, ...series.map((s) => s.total));
@@ -1776,6 +1795,7 @@ function applyRoleNav() {
     a.classList.toggle('hidden', isSuper ? !platform : isParent ? k !== 'portal' : (platform || k === 'portal'));
   });
   if (!isSuper && !isParent) document.querySelectorAll('nav [data-module]').forEach((a) => { const k = a.dataset.module; if (['dashboard', 'settings'].includes(k) || k.startsWith('platform-')) return; if (permOf(k === 'broadcasts' ? 'notifications' : k) === 'none') a.classList.add('hidden'); });
+  syncNavGroups();
   $('nav-platform-title').classList.toggle('hidden', !isSuper);
   $('search-box').classList.toggle('hidden', !!isSuper || !!isParent);
 }

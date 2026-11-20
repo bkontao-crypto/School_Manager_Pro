@@ -1,3 +1,12 @@
+// Le menu regroupe les modules sous des rubriques repliées : on ouvre la rubrique comme le ferait un utilisateur.
+async function navTo(page, key) {
+  await page.evaluate((k) => {
+    const a = document.querySelector(`nav [data-module="${k}"]`);
+    const w = a && a.closest('[data-group-wrap]');
+    if (w && w.querySelector('.nav-panel').classList.contains('hidden')) w.querySelector('[data-group]').click();
+  }, key);
+  await page.click(`nav [data-module="${key}"]`);
+}
 // Recette navigateur Phase 1 (grades, corrections, périodes, tableau de bord par rôle).
 // Prérequis : serveur démarré sur http://127.0.0.1:3100 avec une base de test (_test) et les comptes de recette ;
 // Playwright installé (require('playwright')). Lancer : node tests/browser/recette-phase1.js
@@ -38,7 +47,7 @@ async function modalFill(page, values) {
   const browser = await chromium.launch();
   // 1. Enseignant : demande de correction puis retrait à l'écran
   const T = await login(browser, 'prof@a.test', 'Motdepasse-123');
-  await T.page.click('nav [data-module="grades"]'); await T.page.waitForTimeout(900);
+  await navTo(T.page, 'grades'); await T.page.waitForTimeout(900);
   await T.page.fill('#module-q', 'Recette').catch(() => {}); await T.page.keyboard.press('Enter').catch(() => {}); await T.page.waitForTimeout(700);
   const rowV = T.page.locator('tr', { hasText: 'Recette-validee' });
   check('enseignant : la note validée affiche « Corriger »', await rowV.locator('button[data-act=correct]').count() === 1);
@@ -56,7 +65,7 @@ async function modalFill(page, values) {
 
   // 2. Administrateur : validation d'une note en saisie, puis approbation d'une correction
   const A = await login(browser, 'admin@a.test', 'Motdepasse-123');
-  await A.page.click('nav [data-module="grades"]'); await A.page.waitForTimeout(900);
+  await navTo(A.page, 'grades'); await A.page.waitForTimeout(900);
   await A.page.fill('#module-q', 'Recette').catch(() => {}); await A.page.keyboard.press('Enter').catch(() => {}); await A.page.waitForTimeout(700);
   const rowS = A.page.locator('tr', { hasText: 'Recette-saisie' });
   check('administrateur : la note en saisie propose « Valider »', await rowS.locator('button[data-act=validate]').count() === 1);
@@ -65,7 +74,7 @@ async function modalFill(page, values) {
   check('administrateur : la note est validée côté serveur', gradesNow.find((g) => g.id === gSaisie).status === 'validee');
   // Nouvelle demande de l'enseignant, décidée par l'administrateur depuis Paramètres
   await api('POST', `/api/grades/${gValid}/corrections`, teacher, { score: 15, reason: 'Correction pour approbation' });
-  await A.page.click('nav [data-module="settings"]'); await A.page.waitForTimeout(1200);
+  await navTo(A.page, 'settings'); await A.page.waitForTimeout(1200);
   const approve = A.page.locator('#corrections-list [data-correction-approve]').first();
   check('administrateur : la demande apparaît avec « Approuver »', await approve.count() >= 1);
   await approve.click(); await A.page.waitForTimeout(500);
@@ -85,7 +94,7 @@ async function modalFill(page, values) {
   check('administrateur : aucune erreur JavaScript', A.errors.length === 0, A.errors.join(' | '));
 
   const G = await login(browser, 'gerant@a.test', 'Gerant-Pass-2026');
-  await G.page.click('nav [data-module="settings"]'); await G.page.waitForTimeout(1200);
+  await navTo(G.page, 'settings'); await G.page.waitForTimeout(1200);
   const gRow = G.page.locator('#periods-list div', { hasText: 'du 01/07/2025' }).first();
   check('gérant : période clôturée propose « Rouvrir »', await gRow.locator('[data-period-reopen]').count() === 1);
   await gRow.locator('[data-period-reopen]').click(); await G.page.waitForTimeout(500);
@@ -96,7 +105,7 @@ async function modalFill(page, values) {
 
   // 4. Tableau de bord par rôle
   for (const [label, ctx] of [['administrateur', A], ['enseignant', T], ['gérant', G]]) {
-    await ctx.page.click('nav [data-module="dashboard"]'); await ctx.page.waitForTimeout(1200);
+    await navTo(ctx.page, 'dashboard'); await ctx.page.waitForTimeout(1200);
     const t = (await ctx.page.textContent('main')) || '';
     check(`${label} : tableau de bord chargé sans erreur`, ctx.errors.length === 0 && t.length > 50, ctx.errors.join(' | '));
   }
