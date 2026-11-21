@@ -1,5 +1,5 @@
 # État actuel — SCHOOL MANAGER PRO
-**Date :** 2026-11-21 — **Branche de travail :** `refonte-ui-phase1` — **Dernier commit :** voir `git log -1` (poussé ; PR #3 en brouillon, non fusionnée)
+**Date :** 2026-11-21 — **Branche de travail :** `refonte-ui-phase1` — **Dernier commit :** voir `git log -1` (poussé ; PR #3 fusionnée dans `main` le 2026-11-21, commit de fusion `8c59246`)
 
 ## Dernière phase terminée et vérifiée
 Modules financiers, premier périmètre : factures familiales, affectation des paiements, PDF de facture et envoi aux responsables (migration 035, API /api/invoices, onglet Finances › Factures). Détail : `RAPPORT_TESTS_PHASE1.md` section 19.
@@ -10,7 +10,7 @@ Modules financiers, premier périmètre : factures familiales, affectation des p
 - Recettes navigateur : phase1 18/18, messagerie 9/9, factures 10/10
 
 ## Problèmes ouverts
-- PR #3 : à fusionner seulement sur autorisation.
+- Déploiement Render : après fusion, exécuter `npm run migrate` sur la base de production (migrations 035 et suivantes) ; Render suit `main`.
 - Branche `retrait-audit-cookies-traceurs` : décision de fusion en attente.
 - Quota « contacts / responsables » non défini dans le modèle de contrat.
 - « Aide & Support » : pas d'implémentation (affiché « À venir »).
