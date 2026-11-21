@@ -8,7 +8,7 @@ const { loadTenantLogo } = require('./brandLogo');
 const { amountInWords } = require('./amountWords');
 const { htmlLayout } = require('./mailer');
 
-const money = (n) => `${new Intl.NumberFormat('fr-FR').format(Math.round(Number(n))).replace(/[  ]/g, ' ')} F CFA`;
+const money = (n) => `${new Intl.NumberFormat('fr-FR').format(Math.round(Number(n))).replace(/[  ]/g, ' ')} F CFA`;
 const dateFr = (d) => (d ? String(d).slice(0, 10).split('-').reverse().join('/') : '-');
 
 // null si la facture n'existe pas dans cet établissement.
@@ -59,17 +59,24 @@ function renderFamilyInvoice(x) {
   if (x.due_on) pdf.text(R - 16, y - 39, `Échéance : ${dateFr(x.due_on)}`, { size: 9, color: C.muted, align: 'right' });
   y -= 56 + 22;
 
-  // Entête du tableau des lignes
-  const cQty = R - 210; const cUnit = R - 140;
-  pdf.rect(L, y - 20, CW, 20, { fill: C.zebra });
-  pdf.text(L + 10, y - 13, 'DÉSIGNATION', { size: 8, bold: true, color: C.muted });
-  pdf.text(cQty, y - 13, 'QTÉ', { size: 8, bold: true, color: C.muted });
-  pdf.text(cUnit, y - 13, 'UNITAIRE', { size: 8, bold: true, color: C.muted });
-  pdf.text(R - 10, y - 13, 'MONTANT', { size: 8, bold: true, color: C.muted, align: 'right' });
-  y -= 20;
+  // Tableau des lignes : entête répétée à chaque page, nouvelle page si la place manque
+  const cQty = R - 250; const cUnit = R - 190;
+  const tableHead = () => {
+    pdf.rect(L, y - 20, CW, 20, { fill: C.zebra });
+    pdf.text(L + 10, y - 13, 'DÉSIGNATION', { size: 8, bold: true, color: C.muted });
+    pdf.text(cQty, y - 13, 'QTÉ', { size: 8, bold: true, color: C.muted });
+    pdf.text(cUnit, y - 13, 'UNITAIRE', { size: 8, bold: true, color: C.muted });
+    pdf.text(R - 10, y - 13, 'MONTANT', { size: 8, bold: true, color: C.muted, align: 'right' });
+    y -= 20;
+  };
+  const room = (need) => {
+    if (y - need < 110) { pdf.addPage(); y = pdf.height - 60; tableHead(); }
+  };
+  tableHead();
 
   // Lignes
   for (const it of x.items) {
+    room(22);
     pdf.text(L + 10, y - 14, String(it.label).slice(0, 70), { size: 10, color: C.ink });
     pdf.text(cQty, y - 14, String(it.quantity), { size: 10, color: C.text });
     pdf.text(cUnit, y - 14, money(it.unit_amount), { size: 9.5, color: C.text });
@@ -78,12 +85,13 @@ function renderFamilyInvoice(x) {
     y -= 22;
   }
   y -= 16;
+  room(170);
 
   // Totaux (bloc à droite)
   const tot = (k, v, opts = {}) => { pdf.text(R - 190, y, k, { size: 9.5, color: C.muted }); pdf.text(R - 10, y, v, { size: opts.size || 10.5, bold: !!opts.bold, color: opts.color || C.ink, align: 'right' }); y -= 20; };
   tot('Total de la facture', money(x.total));
   tot('Montant payé', money(x.paid));
-  tot('Solde dû', money(x.balance), { bold: true, size: 12, color: soldee ? C.good : C.brandDark });
+  tot('Solde dû', money(annulee ? 0 : x.balance), { bold: true, size: 12, color: soldee ? C.good : C.brandDark });
   y -= 6;
 
   // Statut

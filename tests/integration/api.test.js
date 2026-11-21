@@ -1926,6 +1926,10 @@ if (!TEST_URL) {
         assert.equal(r.status, 200);
         assert.match(r.headers.get('content-type'), /application\/pdf/);
         assert.equal(r.text.slice(0, 5), '%PDF-');
+        const many = await api('POST', '/api/invoices', { token: tokens.adminA, body: { student_id: sidP, items: Array.from({ length: 30 }, (_, i) => ({ label: `Ligne ${i + 1}`, unit_amount: 1000 })) } });
+        const longPdf = await api('GET', `/api/invoices/${many.json.id}/invoice.pdf`, { token: tokens.adminA });
+        assert.equal(longPdf.status, 200);
+        assert.ok((longPdf.text.match(/\/Type \/Page[^s]/g) || []).length >= 2, 'une facture de 30 lignes tient sur plusieurs pages');
         assert.equal((await api('GET', `/api/invoices/${invP.id}/invoice.pdf`, { token: tokens.adminB })).status, 404);
         assert.equal((await api('GET', `/api/invoices/${invP.id}/invoice.pdf`, { token: tokens.teacherA })).status, 403);
       });
@@ -1944,6 +1948,34 @@ if (!TEST_URL) {
         assert.equal((await api('POST', `/api/invoices/${invCancelled.id}/send`, { token: tokens.adminA })).status, 409);
         assert.equal((await api('POST', `/api/invoices/${invP.id}/send`, { token: tokens.teacherA })).status, 403);
         assert.equal((await api('POST', `/api/invoices/${invP.id}/send`, { token: tokens.adminB })).status, 404);
+      });
+
+      it('envoi réel par SMTP : message avec la facture PDF en pièce jointe ; reçu affecté : PDF ; facture annulée : pas d’envoi', async () => {
+        const { startFakeSmtp } = require('../helpers/fakeSmtp');
+        const smtp = await startFakeSmtp();
+        const keys = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_SECURE', 'MAIL_FROM'];
+        try {
+          process.env.SMTP_HOST = '127.0.0.1'; process.env.SMTP_PORT = String(smtp.port); process.env.SMTP_SECURE = 'false'; process.env.MAIL_FROM = 'noreply@smp.test';
+          const s = await api('POST', `/api/invoices/${invP.id}/send`, { token: tokens.adminA });
+          assert.equal(s.status, 200, s.text);
+          assert.equal(s.json.data[0].status, 'sent', JSON.stringify(s.json.data));
+          assert.equal(smtp.messages.length, 1);
+          assert.deepEqual(smtp.messages[0].to, ['<mere@famille.test>']);
+          assert.match(smtp.messages[0].raw, /application\/pdf/);
+          assert.match(smtp.messages[0].raw, /facture-FAC-\d{6}\.pdf/);
+        } finally {
+          keys.forEach((k) => delete process.env[k]);
+          await smtp.close();
+        }
+        // Reçu d'un paiement affecté à la facture : PDF généré
+        const pay = (await api('POST', '/api/payments', { token: tokens.adminA, body: { student_id: sidP, amount: 30000 } })).json.data;
+        const alloc = await api('POST', `/api/invoices/${invP.id}/allocations`, { token: tokens.adminA, body: { payment_id: pay.id, amount: 20000 } });
+        assert.equal(alloc.status, 201, alloc.text);
+        const rc = await api('GET', `/api/payments/${pay.id}/receipt.pdf`, { token: tokens.adminA });
+        assert.equal(rc.status, 200);
+        assert.equal(rc.text.slice(0, 5), '%PDF-');
+        const cancelled = await api('POST', `/api/invoices/${invCancelled.id}/send`, { token: tokens.adminA });
+        assert.equal(cancelled.status, 409);
       });
     });
 
