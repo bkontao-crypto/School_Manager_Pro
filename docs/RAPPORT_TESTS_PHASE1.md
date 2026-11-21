@@ -265,3 +265,10 @@ Réalisé et vérifié :
 - Tests : unitaires 32/32 ; intégration 111/111 ; recettes navigateur 18/18 et 9/9 (base réinitialisée).
 
 Non vérifié : fiche élève sur tablette et les autres tableaux un par un (rendu contrôlé sur la seule fiche élève et la liste élèves).
+
+## 18. Vérification tablette : liste élèves et fiche élève (768 px et 1024 px, émulation Chromium)
+
+- Liste élèves et fiche élève : aucun débordement horizontal de page à 768 ni à 1024 px.
+- Fiche élève à 768 px : informations, responsables et sections d'historique lisibles.
+- Limite : la fiche a été contrôlée sans historique rempli ; les tableaux avec données défilent dans leur carte (`overflow-x-auto`), comportement non vérifié visuellement sur données réelles.
+- Aucun changement de code dans cette étape.
