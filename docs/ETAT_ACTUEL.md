@@ -2,7 +2,7 @@
 **Date :** 2026-11-20 — **Branche de travail :** `refonte-ui-phase1` — **Dernier commit :** `3e71041` (poussé, PR #3 en brouillon, non fusionnée)
 
 ## Dernière phase terminée et vérifiée
-Modales vérifiées sur tablette 768 et 1024 px (émulation) ; messages de champ vérifiés sur tous les modules à formulaire (aucun changement de code). Phase 3 (menu) et phase 2 (tableau de bord, affiche) déjà vérifiées.
+Phase 6 : fiche élève vérifiée, en-têtes de tableaux uniformisés dans toute l'application. Phase 5 : modales et messages de champ vérifiés. Phase 3 (menu) et phase 2 (tableau de bord, affiche) déjà vérifiées.
 
 ## Tests exécutés (sur ce commit)
 - Unitaires : 32/32
@@ -22,4 +22,4 @@ Modales vérifiées sur tablette 768 et 1024 px (émulation) ; messages de champ
 - `docs/SUIVI_EXECUTION_SCHOOL_MANAGER_PRO.xlsx` : non régénéré depuis la phase 2 (sur demande uniquement).
 
 ## Prochaine tâche
-À proposer : vérifier sur appareil réel, ou passer à la phase suivante du plan (à définir avec vous).
+À proposer : vérifier la fiche élève et les tableaux sur tablette ; puis phase suivante (modules financiers : factures et reçus).

@@ -256,3 +256,12 @@ Vérifié :
 - Aucun débordement horizontal de page.
 
 Non vérifié : appareils physiques (seule l'émulation Chromium a été utilisée) ; modales de notes, classes et stocks sur tablette.
+
+## 17. Refonte UI — phase 6 : fiche élève et en-têtes de tableaux
+
+Réalisé et vérifié :
+- Fiche « Dossier individuel de l'élève » : vérifiée dans le navigateur (1440 px), aucune erreur de page.
+- En-têtes de tableau uniformisés dans toute l'application (14 styles d'en-tête et 56 cellules d'en-tête alignés sur le gabarit des listes). Modification de classes CSS uniquement, sans changement de logique.
+- Tests : unitaires 32/32 ; intégration 111/111 ; recettes navigateur 18/18 et 9/9 (base réinitialisée).
+
+Non vérifié : fiche élève sur tablette et les autres tableaux un par un (rendu contrôlé sur la seule fiche élève et la liste élèves).
