@@ -1805,6 +1805,103 @@ if (!TEST_URL) {
       });
     });
 
+    describe('Finances · factures familiales et affectation des paiements', () => {
+      let sid;
+      let sidOther;
+      let sidB;
+      const payFor = async (token, student_id, amount, extra = {}) => (await api('POST', '/api/payments', { token, body: { student_id, amount, ...extra } })).json.data;
+      const invoice = (token, student_id, items, extra = {}) => api('POST', '/api/invoices', { token, body: { student_id, items, ...extra } });
+      const allocate = (token, invoiceId, payment_id, amount) => api('POST', `/api/invoices/${invoiceId}/allocations`, { token, body: { payment_id, amount } });
+      before(async () => {
+        sid = (await api('POST', '/api/students', { token: tokens.adminA, body: { matricule: 'INV-A1', first_name: 'Inv', last_name: 'Un' } })).json.data.id;
+        sidOther = (await api('POST', '/api/students', { token: tokens.adminA, body: { matricule: 'INV-A2', first_name: 'Inv', last_name: 'Deux' } })).json.data.id;
+        sidB = (await api('POST', '/api/students', { token: tokens.adminB, body: { matricule: 'INV-B1', first_name: 'Inv', last_name: 'B' } })).json.data.id;
+      });
+
+      it('grilles de frais par établissement, facture avec total calculé par le serveur et numérotation FAC-', async () => {
+        const fee = await api('POST', '/api/invoices/fee-structures', { token: tokens.adminA, body: { label: 'Scolarité T1', amount: 45000 } });
+        assert.equal(fee.status, 201);
+        assert.equal((await api('GET', '/api/invoices/fee-structures', { token: tokens.adminB })).json.data.some((f) => f.label === 'Scolarité T1'), false);
+        const r = await invoice(tokens.adminA, sid, [{ label: 'Scolarité', quantity: 1, unit_amount: 45000 }, { label: 'Cantine', quantity: 2, unit_amount: 1500 }], { total: 1 });
+        assert.equal(r.status, 201);
+        assert.match(r.json.invoice_number, /^FAC-\d{6}$/);
+        const detail = (await api('GET', `/api/invoices/${r.json.id}`, { token: tokens.adminA })).json;
+        assert.equal(Number(detail.total), 48000, 'le total fourni par le client est ignoré');
+        assert.equal(Number(detail.balance), 48000);
+        assert.equal(detail.items.length, 2);
+        const r2 = await invoice(tokens.adminA, sid, [{ label: 'Transport', unit_amount: 1000 }]);
+        assert.equal(r2.json.invoice_number, `FAC-${String(Number(r.json.invoice_number.slice(4)) + 1).padStart(6, '0')}`);
+        assert.equal((await api('DELETE', `/api/invoices/fee-structures/${fee.json.id}`, { token: tokens.adminA })).status, 200);
+      });
+
+      it('refuse les lignes invalides, un élève d’un autre établissement et les rôles sans droit d’écriture', async () => {
+        assert.equal((await invoice(tokens.adminA, sid, [])).status, 400);
+        assert.equal((await invoice(tokens.adminA, sid, [{ label: 'X', quantity: 0, unit_amount: 10 }])).status, 400);
+        assert.equal((await invoice(tokens.adminA, sid, [{ label: 'X', unit_amount: -5 }])).status, 400);
+        assert.equal((await invoice(tokens.adminA, sidB, [{ label: 'X', unit_amount: 10 }])).status, 422, 'élève de l’établissement B');
+        assert.equal((await invoice(tokens.adminA, 'ffffffff-ffff-4fff-8fff-ffffffffffff', [{ label: 'X', unit_amount: 10 }])).status, 422);
+        assert.equal((await invoice(tokens.teacherA, sid, [{ label: 'X', unit_amount: 10 }])).status, 403);
+        assert.equal((await api('GET', '/api/invoices', { token: tokens.teacherA })).status, 403);
+        assert.equal((await api('GET', '/api/invoices', { token: tokens.adminB })).json.meta.total, 0, 'isolation : factures de A invisibles pour B');
+      });
+
+      it('affecte un paiement dans la limite du solde facture et du solde paiement, sans sur-affectation', async () => {
+        const pay = await payFor(tokens.adminA, sid, 10000);
+        const inv1 = (await invoice(tokens.adminA, sid, [{ label: 'Frais', unit_amount: 6000 }])).json;
+        const inv2 = (await invoice(tokens.adminA, sid, [{ label: 'Frais', unit_amount: 5000 }])).json;
+        assert.equal((await allocate(tokens.adminA, inv1.id, pay.id, 6000)).status, 201);
+        const avail = (await api('GET', `/api/invoices/allocatable-payments?student_id=${sid}`, { token: tokens.adminA })).json.data;
+        assert.equal(Number(avail.find((p) => p.id === pay.id).remaining), 4000);
+        assert.equal((await allocate(tokens.adminA, inv2.id, pay.id, 4500)).status, 422, 'supérieur au solde disponible du paiement');
+        assert.equal((await allocate(tokens.adminA, inv1.id, pay.id, 100)).status, 409, 'facture déjà soldée');
+        assert.equal((await allocate(tokens.adminA, inv2.id, pay.id, 4000)).status, 201);
+        const paid = (await api('GET', `/api/invoices/${inv2.id}`, { token: tokens.adminA })).json;
+        assert.equal(Number(paid.balance), 1000);
+        assert.equal((await api('GET', '/api/invoices', { token: tokens.accountantA })).status, 200);
+        const payFull = (await api('GET', `/api/invoices/allocatable-payments?student_id=${sid}`, { token: tokens.adminA })).json.data;
+        assert.equal(payFull.some((p) => p.id === pay.id), false, 'paiement entièrement affecté retiré de la liste');
+      });
+
+      it('règles : paiement d’un autre élève, paiement non encaissé, paiement d’un autre établissement', async () => {
+        const inv = (await invoice(tokens.adminA, sid, [{ label: 'Règle', unit_amount: 300 }])).json;
+        const other = await payFor(tokens.adminA, sidOther, 500);
+        const pending = await payFor(tokens.adminA, sid, 500, { status: 'en_attente' });
+        const foreign = await payFor(tokens.adminB, sidB, 500);
+        assert.equal((await allocate(tokens.adminA, inv.id, other.id, 100)).status, 422);
+        assert.equal((await allocate(tokens.adminA, inv.id, pending.id, 100)).status, 409);
+        assert.equal((await allocate(tokens.adminA, inv.id, foreign.id, 100)).status, 404);
+        assert.equal((await allocate(tokens.adminA, inv.id, pending.id, 0)).status, 400);
+      });
+
+      it('deux affectations simultanées sur le même reste à payer : une seule réussit', async () => {
+        const pay = await payFor(tokens.adminA, sid, 5000);
+        const i1 = (await invoice(tokens.adminA, sid, [{ label: 'Course', unit_amount: 4000 }])).json;
+        const i2 = (await invoice(tokens.adminA, sid, [{ label: 'Course', unit_amount: 4000 }])).json;
+        const [a, b] = await Promise.all([allocate(tokens.adminA, i1.id, pay.id, 4000), allocate(tokens.adminA, i2.id, pay.id, 4000)]);
+        assert.deepEqual([a.status, b.status].sort(), [201, 422]);
+        const sum = await pool.query('SELECT COALESCE(SUM(amount),0)::text AS s FROM payment_allocations WHERE payment_id = $1', [pay.id]);
+        assert.equal(Number(sum.rows[0].s), 4000);
+      });
+
+      it('annulation : libère les affectations, reste visible, bloque toute nouvelle affectation', async () => {
+        const pay = await payFor(tokens.adminA, sid, 3000);
+        const inv = (await invoice(tokens.adminA, sid, [{ label: 'Annulable', unit_amount: 3000 }])).json;
+        assert.equal((await allocate(tokens.adminA, inv.id, pay.id, 3000)).status, 201);
+        const c = await api('POST', `/api/invoices/${inv.id}/cancel`, { token: tokens.adminA });
+        assert.equal(c.status, 200);
+        assert.equal(c.json.released, '3000.00');
+        const detail = (await api('GET', `/api/invoices/${inv.id}`, { token: tokens.adminA })).json;
+        assert.equal(detail.status, 'annulee');
+        assert.equal(detail.allocations.length, 0);
+        assert.equal((await api('POST', `/api/invoices/${inv.id}/cancel`, { token: tokens.adminA })).status, 409);
+        assert.equal((await allocate(tokens.adminA, inv.id, pay.id, 100)).status, 409);
+        const avail = (await api('GET', `/api/invoices/allocatable-payments?student_id=${sid}`, { token: tokens.adminA })).json.data;
+        assert.equal(Number(avail.find((p) => p.id === pay.id).remaining), 3000, 'montant de nouveau disponible');
+        const log = await pool.query("SELECT count(*)::int AS n FROM audit_logs WHERE tenant_id = $1 AND action = 'invoice.cancel'", [TA]);
+        assert.ok(log.rows[0].n >= 1, 'annulation journalisée');
+      });
+    });
+
     describe('Logo de l’établissement dans les bulletins (charte PDF)', () => {
       const zlib = require('node:zlib');
       const realPng = (w, h) => {

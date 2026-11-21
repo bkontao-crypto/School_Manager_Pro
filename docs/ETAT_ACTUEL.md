@@ -1,14 +1,13 @@
 # État actuel — SCHOOL MANAGER PRO
-**Date :** 2026-11-20 — **Branche de travail :** `refonte-ui-phase1` — **Dernier commit :** `3e71041` (poussé, PR #3 en brouillon, non fusionnée)
+**Date :** 2026-11-21 — **Branche de travail :** `refonte-ui-phase1` — **Dernier commit :** voir `git log -1` (poussé ; PR #3 en brouillon, non fusionnée)
 
 ## Dernière phase terminée et vérifiée
-Phase 6 : fiche élève vérifiée, en-têtes de tableaux uniformisés. Vérification tablette de la liste élèves et de la fiche faite (768 et 1024 px). Phase 5 : modales et messages de champ vérifiés. Phase 3 (menu) et phase 2 (tableau de bord, affiche) déjà vérifiées.
+Modules financiers, premier périmètre : factures familiales et affectation des paiements (migration 035, API /api/invoices, onglet Finances › Factures). Détail : `RAPPORT_TESTS_PHASE1.md` section 19.
 
 ## Tests exécutés (sur ce commit)
 - Unitaires : 32/32
-- Intégration (PostgreSQL de test, migrations rejouées) : 111/111
-- Recettes navigateur : 18/18 (`recette-phase1.js`) et 9/9 (`recette-messagerie.js`)
-- Captures contrôlées : tableau de bord, gestionnaire d'affiche, graphiques
+- Intégration (PostgreSQL de test, migrations rejouées) : 117/117
+- Recettes navigateur : phase1 18/18, messagerie 9/9, factures 8/8
 
 ## Problèmes ouverts
 - PR #3 : à fusionner seulement sur autorisation.
@@ -18,8 +17,9 @@ Phase 6 : fiche élève vérifiée, en-têtes de tableaux uniformisés. Vérific
 - Police Poppins : choix provisoire, à confirmer.
 - Messages de champ : vérifiés sur élève, paiement, notes, classes et présences. Enseignants, bibliothèque et stocks vérifiés aussi.
 - Tablettes réelles : non vérifiées (émulation Chromium 768 et 1024 px uniquement).
+- Factures : pas encore de PDF de facture, ni d’envoi par e-mail depuis le module Factures, ni de lien facture ↔ reçu.
 - Paiement en ligne Orange Money / Moov Money : non configuré (voir `ROADMAP_SUIVI.md`).
 - `docs/SUIVI_EXECUTION_SCHOOL_MANAGER_PRO.xlsx` : non régénéré depuis la phase 2 (sur demande uniquement).
 
 ## Prochaine tâche
-À proposer : phase suivante, modules financiers (factures et reçus).
+À proposer : PDF de facture et envoi par e-mail depuis le module Factures (à valider avec vous avant de coder).

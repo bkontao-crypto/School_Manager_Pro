@@ -809,6 +809,7 @@ async function openModule(key, opts = {}) {
   if (key === 'timetable') return openTimetable(opts);
   if (key === 'reports') return openReports();
   if (key === 'settings') return openSettings();
+  if (key === 'invoices') return openInvoices(opts);
   if (!cfg) { moduleView.innerHTML = '<p class="p-6 text-slate-500">Section inconnue.</p>'; return; }
   const EXPORTABLE = { students: 'eleves.csv', grades: 'notes.csv', payments: 'paiements.csv' };
   if (listState.key !== key) { listState.key = key; listState.offset = 0; listState.q = ''; }

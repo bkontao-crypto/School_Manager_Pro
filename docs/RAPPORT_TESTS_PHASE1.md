@@ -272,3 +272,20 @@ Non vérifié : fiche élève sur tablette et les autres tableaux un par un (ren
 - Fiche élève à 768 px : informations, responsables et sections d'historique lisibles.
 - Limite : la fiche a été contrôlée sans historique rempli ; les tableaux avec données défilent dans leur carte (`overflow-x-auto`), comportement non vérifié visuellement sur données réelles.
 - Aucun changement de code dans cette étape.
+
+## 19. Finances : factures familiales et affectation des paiements
+
+Périmètre retenu : factures par élève, grilles de frais, paiements affectés aux factures, soldes et impayés.
+Décisions : annulation d'une facture = libération de ses affectations (la facture reste consultable, statut « Annulée ») ; numérotation FAC-000001 par établissement.
+
+Réalisé et vérifié :
+- Migration 035 (additive) : fee_structures, student_invoices, invoice_items, payment_allocations ; index unique (id, tenant_id) sur students.
+- API /api/invoices (droit « Paiements » : lecture, écriture pour le comptable et l'administrateur) : grilles de frais, création avec total calculé par le serveur, détail avec solde, affectation dans une transaction à verrous de ligne, retrait d'affectation, annulation journalisée.
+- Interface : entrée « Factures » dans Finances, liste filtrable et paginée, création avec lignes multiples et choix dans la grille, détail avec affectation, retrait et annulation.
+- Tests d'intégration ajoutés (6) : calcul serveur et numérotation ; lignes invalides, élève d'un autre établissement, rôle sans droit ; affectation bornée au solde facture et au solde paiement ; mauvais élève, paiement non encaissé, paiement d'un autre établissement ; deux affectations simultanées sur le même reste (une seule réussit) ; annulation libérant les affectations.
+- Recette navigateur `recette-factures.js` (8/8) : création via l'interface, total à l'écran, affectation de 5 000 F, solde recalculé, statut « Partielle », aucune erreur JavaScript.
+- Tests : unitaires 32/32 ; intégration 117/117 ; recettes phase1 18/18, messagerie 9/9, factures 8/8.
+
+Non vérifié : factures sur tablette ; données réelles de volume ; droits des rôles autres que administrateur et comptable sur les factures (couverts par les tests d'accès, pas par une recette navigateur).
+Non traité : impression ou PDF de la facture ; envoi de la facture par e-mail ; lien facture ↔ reçu PDF.
+

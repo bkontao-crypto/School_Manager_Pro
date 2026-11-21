@@ -20,7 +20,7 @@
 - Ciblés pendant le travail, suite complète en fin de phase :
   - `npm test` (unitaires)
   - `TEST_DATABASE_URL=… node --test tests/integration/api.test.js`
-  - `node tests/browser/recette-phase1.js` et `recette-messagerie.js` (serveur sur le port 3100)
+  - `node tests/browser/recette-phase1.js`, `recette-messagerie.js` et `recette-factures.js` (serveur sur le port 3100)
 
 ## Fin de phase (et seulement là)
 1. Mettre à jour `docs/ETAT_ACTUEL.md` (dernière tâche, tests, problèmes ouverts, prochaine tâche).
