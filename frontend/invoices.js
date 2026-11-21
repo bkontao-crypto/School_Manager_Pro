@@ -228,6 +228,10 @@ async function openInvoiceDetail(id) {
         <div class="flex gap-2 items-end"><label class="block flex-1 text-xs font-semibold text-slate-600">Montant (F)<input name="amount" inputmode="decimal" value="${suggested(avail[0])}" class="${INPUT_CLS}"></label>
         <button type="submit" class="px-4 py-2 rounded-lg bg-royal-600 text-white text-sm font-semibold">Affecter</button></div></form>` : '<p class="text-sm text-slate-500 mt-4">Aucun paiement encaissé disponible pour cet élève.</p>') : ''}
     ${canEdit && emise ? '<div class="mt-5 pt-4 border-t border-slate-100 text-right"><button type="button" id="inv-cancel" class="text-sm font-semibold text-red-600 hover:underline">Annuler la facture</button></div>' : ''}
+    <div class="mt-5 flex flex-wrap gap-2 justify-end">
+      <button type="button" id="inv-pdf" class="px-4 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700"><i class="fa-solid fa-file-pdf mr-2"></i>Télécharger le PDF</button>
+      ${canEdit && emise ? '<button type="button" id="inv-send" class="px-4 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700"><i class="fa-solid fa-envelope mr-2"></i>Envoyer aux responsables</button>' : ''}
+    </div>
     <p id="inv-detail-msg" class="text-sm mt-3 text-red-600" role="alert"></p>
     <div class="mt-4 flex justify-end"><button type="button" data-modal-cancel class="px-4 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700">Fermer</button></div>`);
   const box = $('modal-box');
@@ -251,6 +255,23 @@ async function openInvoiceDetail(id) {
     if (!(await confirmDialog('Retirer ce paiement', 'Le montant redeviendra disponible sur le paiement.'))) return;
     try { await api('DELETE', `/api/invoices/${encodeURIComponent(id)}/allocations/${encodeURIComponent(b.dataset.unalloc)}`); toast('Affectation retirée.'); await reload(); } catch (e) { msg.textContent = e.message; }
   }));
+  $('inv-pdf').addEventListener('click', async () => {
+    msg.textContent = '';
+    try { await downloadFile(`/api/invoices/${encodeURIComponent(id)}/invoice.pdf`, `facture-${inv.invoice_number}.pdf`); } catch (e) { msg.textContent = e.message; }
+  });
+  const sendBtn = $('inv-send');
+  if (sendBtn) sendBtn.addEventListener('click', async () => {
+    msg.textContent = '';
+    try {
+      const { data } = await api('POST', `/api/invoices/${encodeURIComponent(id)}/send`);
+      const sent = data.filter((r) => r.status === 'sent').length;
+      const skipped = data.filter((r) => r.status === 'skipped').length;
+      const failed = data.filter((r) => r.status === 'failed');
+      if (sent) toast(`Facture envoyée à ${sent} responsable(s).`);
+      if (skipped) msg.textContent = 'Envoi d’e-mails non configuré sur le serveur : la facture est consignée mais non expédiée.';
+      if (failed.length) msg.textContent = `Échec d’envoi : ${failed[0].error || 'erreur SMTP'}`;
+    } catch (e) { msg.textContent = e.message; }
+  });
   const cancelBtn = $('inv-cancel');
   if (cancelBtn) cancelBtn.addEventListener('click', async () => {
     if (!(await confirmDialog('Annuler la facture', 'La facture reste consultable, marquée « Annulée ». Les paiements qui lui étaient affectés redeviennent disponibles.'))) return;

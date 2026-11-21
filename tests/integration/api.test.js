@@ -1902,6 +1902,51 @@ if (!TEST_URL) {
       });
     });
 
+    describe('Finances · PDF de facture et envoi aux responsables', () => {
+      let sidP;
+      let sidNoMail;
+      let invP;
+      let invNoMail;
+      let invCancelled;
+      before(async () => {
+        sidP = (await api('POST', '/api/students', { token: tokens.adminA, body: { matricule: 'PDF-A1', first_name: 'Pdf', last_name: 'Famille' } })).json.data.id;
+        sidNoMail = (await api('POST', '/api/students', { token: tokens.adminA, body: { matricule: 'PDF-A2', first_name: 'Sans', last_name: 'Mail' } })).json.data.id;
+        const par = await pool.query(`INSERT INTO parents (tenant_id, first_name, last_name, email) VALUES ($1, 'Mère', 'Test', 'mere@famille.test') RETURNING id`, [TA]);
+        await pool.query(`INSERT INTO student_parents (tenant_id, student_id, parent_id, relationship, is_primary) VALUES ($1, $2, $3, 'Mère', true)`, [TA, sidP, par.rows[0].id]);
+        const noPar = await pool.query(`INSERT INTO parents (tenant_id, first_name, last_name, phone) VALUES ($1, 'Sans', 'Courriel', '70000000') RETURNING id`, [TA]);
+        await pool.query(`INSERT INTO student_parents (tenant_id, student_id, parent_id, relationship) VALUES ($1, $2, $3, 'Père')`, [TA, sidNoMail, noPar.rows[0].id]);
+        invP = (await api('POST', '/api/invoices', { token: tokens.adminA, body: { student_id: sidP, items: [{ label: 'Scolarité', unit_amount: 30000 }, { label: 'Cantine', quantity: 3, unit_amount: 2000 }] } })).json;
+        invNoMail = (await api('POST', '/api/invoices', { token: tokens.adminA, body: { student_id: sidNoMail, items: [{ label: 'Scolarité', unit_amount: 1000 }] } })).json;
+        invCancelled = (await api('POST', '/api/invoices', { token: tokens.adminA, body: { student_id: sidP, items: [{ label: 'Annulée', unit_amount: 500 }] } })).json;
+        await api('POST', `/api/invoices/${invCancelled.id}/cancel`, { token: tokens.adminA });
+      });
+
+      it('PDF de la facture : téléchargeable par son établissement, introuvable pour un autre', async () => {
+        const r = await api('GET', `/api/invoices/${invP.id}/invoice.pdf`, { token: tokens.adminA });
+        assert.equal(r.status, 200);
+        assert.match(r.headers.get('content-type'), /application\/pdf/);
+        assert.equal(r.text.slice(0, 5), '%PDF-');
+        assert.equal((await api('GET', `/api/invoices/${invP.id}/invoice.pdf`, { token: tokens.adminB })).status, 404);
+        assert.equal((await api('GET', `/api/invoices/${invP.id}/invoice.pdf`, { token: tokens.teacherA })).status, 403);
+      });
+
+      it('envoi : aux responsables ayant un e-mail, journalisé dans la file d’envoi ; refus si pas d’adresse, facture annulée ou rôle sans droit', async () => {
+        const s = await api('POST', `/api/invoices/${invP.id}/send`, { token: tokens.adminA });
+        assert.equal(s.status, 200);
+        assert.equal(s.json.data.length, 1);
+        assert.equal(s.json.data[0].to, 'mere@famille.test');
+        assert.ok(['sent', 'failed', 'skipped'].includes(s.json.data[0].status));
+        const row = await pool.query(`SELECT kind, ref, tenant_id FROM mail_outbox WHERE ref = $1`, [invP.id]);
+        assert.equal(row.rows.length, 1);
+        assert.equal(row.rows[0].kind, 'family_invoice');
+        assert.equal(row.rows[0].tenant_id, TA);
+        assert.equal((await api('POST', `/api/invoices/${invNoMail.id}/send`, { token: tokens.adminA })).status, 422);
+        assert.equal((await api('POST', `/api/invoices/${invCancelled.id}/send`, { token: tokens.adminA })).status, 409);
+        assert.equal((await api('POST', `/api/invoices/${invP.id}/send`, { token: tokens.teacherA })).status, 403);
+        assert.equal((await api('POST', `/api/invoices/${invP.id}/send`, { token: tokens.adminB })).status, 404);
+      });
+    });
+
     describe('Logo de l’établissement dans les bulletins (charte PDF)', () => {
       const zlib = require('node:zlib');
       const realPng = (w, h) => {

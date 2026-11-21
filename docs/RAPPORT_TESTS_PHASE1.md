@@ -287,5 +287,7 @@ Réalisé et vérifié :
 - Tests : unitaires 32/32 ; intégration 117/117 ; recettes phase1 18/18, messagerie 9/9, factures 8/8.
 
 Non vérifié : factures sur tablette ; données réelles de volume ; droits des rôles autres que administrateur et comptable sur les factures (couverts par les tests d'accès, pas par une recette navigateur).
-Non traité : impression ou PDF de la facture ; envoi de la facture par e-mail ; lien facture ↔ reçu PDF.
+Ajout (même phase) : PDF de facture (GET /api/invoices/:id/invoice.pdf, droit « Paiements ») et envoi aux responsables (POST /api/invoices/:id/send, écriture « Paiements ») : destinataires = responsables liés à l’élève ayant un e-mail ; envoi via la file mail_outbox (kind « family_invoice »), journalisé dans l’audit. Refus 422 sans adresse, 409 si annulée.
+Tests : intégration 119/119 (PDF, isolation, envoi, refus) ; recette factures 10/10 (téléchargement du PDF, message d’envoi) ; phase1 18/18 ; messagerie 9/9 ; unitaires 32/32.
+Limites : envoi réel non vérifié (SMTP non configuré en test : statut « skipped ») ; une relance depuis la file n’a pas de pièce jointe régénérée pour ces factures ; lien facture ↔ reçu non traité ; PDF d’une facture de plus de ~18 lignes non vérifié.
 

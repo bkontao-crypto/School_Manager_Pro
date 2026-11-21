@@ -68,6 +68,12 @@ async function navTo(page, key) {
   check('solde recalculé à 15 000 F', /15\s?000/.test(await page.textContent('#modal-box')));
   await page.screenshot({ path: process.env.SHOT_DIR ? `${process.env.SHOT_DIR}/factures-detail.png` : '/dev/null' }).catch(() => {});
 
+  const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 8000 }).catch(() => null), page.click('#inv-pdf')]);
+  check('PDF de facture téléchargé', !!dl && (await dl.suggestedFilename()).startsWith('facture-FAC-'), dl ? await dl.suggestedFilename() : 'aucun téléchargement');
+  await page.click('#inv-send');
+  await page.waitForFunction(() => (document.querySelector('#inv-detail-msg')?.textContent || '').length > 0 || /envoy/i.test(document.querySelector('#toast')?.textContent || ''), null, { timeout: 8000 });
+  const sendMsg = (await page.textContent('#inv-detail-msg')) || (await page.textContent('#toast')) || '';
+  check('envoi aux responsables : résultat clair affiché (refus sans e-mail, non configuré, envoyé ou échec)', /responsable|configuré|envoy|Échec/i.test(sendMsg), sendMsg.trim());
   await page.click('#modal-box [data-modal-cancel]');
   await page.waitForSelector('#inv-rows button[data-inv]', { timeout: 8000 });
   const rowText = await page.textContent('#inv-rows');

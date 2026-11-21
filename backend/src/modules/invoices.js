@@ -11,6 +11,9 @@ const { validate, isUuid } = require('../utils/validate');
 const { wrap, HttpError, invalid, pageParams } = require('../utils/http');
 const { requireWrite } = require('../utils/permissions');
 const { audit } = require('../utils/audit');
+const { sendPdf } = require('../utils/reportCardPdf');
+const { deliver } = require('../utils/mailer');
+const { loadFamilyInvoice, invoiceRecipients, renderFamilyInvoice, invoiceFilename, invoiceEmail } = require('../utils/familyInvoicePdf');
 
 const router = require('express').Router();
 
@@ -252,6 +255,33 @@ router.post('/:id/cancel', requireWrite('payments'), wrap(async (req, res) => {
   });
   await audit(req, { action: 'invoice.cancel', entity: 'invoice', entityId: invoiceId, details: { released: fromCents(released) } });
   res.json({ ok: true, released: fromCents(released) });
+}));
+
+// Facture PDF (lecture : droit « Paiements »).
+router.get('/:id/invoice.pdf', wrap(async (req, res) => {
+  const id = parseId(req.params.id);
+  const x = await loadFamilyInvoice(req.tenantId, id);
+  if (!x) throw new HttpError(404, 'Facture introuvable.');
+  sendPdf(res, renderFamilyInvoice(x), invoiceFilename(x));
+}));
+
+// Envoi de la facture PDF aux responsables de l'élève ayant une adresse e-mail (file d'envoi « mail_outbox »).
+router.post('/:id/send', requireWrite('payments'), wrap(async (req, res) => {
+  const id = parseId(req.params.id);
+  const x = await loadFamilyInvoice(req.tenantId, id);
+  if (!x) throw new HttpError(404, 'Facture introuvable.');
+  if (x.status !== 'emise') throw new HttpError(409, 'Une facture annulée ne peut pas être envoyée.');
+  const to = await invoiceRecipients(req.tenantId, x.student_id);
+  if (!to.length) throw new HttpError(422, 'Aucun responsable de cet élève n’a d’adresse e-mail. Renseignez-la dans la fiche du responsable.');
+  const mail = invoiceEmail(x);
+  const attachments = [{ filename: invoiceFilename(x), contentType: 'application/pdf', content: renderFamilyInvoice(x) }];
+  const results = [];
+  for (const email of to) {
+    const r = await deliver({ tenantId: req.tenantId, to: email, subject: mail.subject, text: mail.text, html: mail.html, kind: 'family_invoice', ref: id, attachments });
+    results.push({ to: email, status: r.status, error: r.error || null });
+  }
+  await audit(req, { action: 'invoice.send', entity: 'invoice', entityId: id, details: { recipients: to.length, statuses: results.map((r) => r.status) } });
+  res.json({ data: results });
 }));
 
 module.exports = router;

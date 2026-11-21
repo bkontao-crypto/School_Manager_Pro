@@ -20,6 +20,7 @@ Le détail des corrections issues de l'audit est dans `docs/AUDIT_SUIVI.md`.
 - [x] Rappels automatiques par e-mail (licences, factures impayées), journal et écran « E-mails » (v2.11.0)
 - [x] Factures : envoi par e-mail, TVA, remises, avoirs, mentions légales (v2.11.0)
 - [x] Factures familiales (refonte finances, migration 035) : grilles de frais par établissement, factures par élève numérotées FAC-000001, lignes calculées côté serveur, affectation de paiements encaissés (même élève, pas de sur-affectation, verrous de ligne), retrait d’une affectation, annulation qui libère les affectations
+- [x] Factures familiales : PDF de facture (solde, paiements affectés, montant en lettres) et envoi aux responsables de l’élève ayant une adresse e-mail (file d’envoi, journalisé, réessayable)
 - [x] Mot de passe oublié par e-mail (v2.11.0)
 - [x] Bulletin : appréciation de l'enseignant et décision du conseil, impression / PDF (v2.11.0)
 - [x] Sauvegarde / restauration et guide de déploiement Windows (v2.11.0)
