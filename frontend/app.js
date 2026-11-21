@@ -105,8 +105,12 @@ function fieldHtml(f, value) {
   if (f.type === 'select') {
     control = `<select name="${f.name}" ${req} class="${INPUT_CLS}">${f.required ? '' : '<option value="">—</option>'}${f.options.map(([val, text]) => `<option value="${escapeHtml(val)}" ${String(val) === String(v) ? 'selected' : ''}>${escapeHtml(text)}</option>`).join('')}</select>`;
   } else if (f.type === 'student') {
-    control = `<input type="search" data-student-search placeholder="Tapez un nom ou un matricule…" autocomplete="off" class="${INPUT_CLS}">
-      <select name="${f.name}" ${req} class="${INPUT_CLS}"><option value="">Choisissez un élève après la recherche</option></select>`;
+    control = `<span class="relative block mt-1" data-student-picker>
+      <input type="search" data-student-search placeholder="Tapez un nom ou un matricule…" autocomplete="off" class="${INPUT_CLS} mt-0">
+      <input type="hidden" name="${f.name}" value="${escapeHtml(v)}" data-student-value>
+      <span data-student-results class="hidden absolute z-20 left-0 right-0 mt-1 max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg py-1 block"></span>
+      <span data-student-status class="block mt-1 text-xs font-normal text-slate-500">Saisissez au moins 2 caractères.</span>
+    </span>`;
   } else if (f.type === 'class') {
     control = `<select name="${f.name}" ${req} data-class-select data-value="${escapeHtml(v)}" class="${INPUT_CLS}"><option value="">Chargement…</option></select>`;
   } else if (f.type === 'teacher') {
@@ -143,21 +147,39 @@ async function hydrateFormWidgets(root) {
       });
     } catch (e) { teacherSelects.forEach((sel) => { sel.innerHTML = '<option value="">Enseignants indisponibles</option>'; }); }
   }
-  root.querySelectorAll('[data-student-search]').forEach((input) => {
-    const select = input.nextElementSibling;
-    let timer;
+  root.querySelectorAll('[data-student-picker]').forEach((picker) => {
+    const input = picker.querySelector('[data-student-search]');
+    const hidden = picker.querySelector('[data-student-value]');
+    const box = picker.querySelector('[data-student-results]');
+    const status = picker.querySelector('[data-student-status]');
+    const setStatus = (text, ok) => { status.textContent = text; status.className = `block mt-1 text-xs font-normal ${ok ? 'text-emerald-700 font-semibold' : 'text-slate-500'}`; };
+    let timer; let seq = 0; let found = [];
+    const pick = (st) => {
+      hidden.value = st.id; input.value = `${st.last_name} ${st.first_name} — ${st.matricule}`;
+      box.classList.add('hidden'); setStatus('Élève sélectionné.', true);
+    };
     input.addEventListener('input', () => {
-      clearTimeout(timer);
+      hidden.value = ''; clearTimeout(timer);
+      const q = input.value.trim();
+      if (q.length < 2) { box.classList.add('hidden'); setStatus('Saisissez au moins 2 caractères.', false); return; }
+      setStatus('Recherche…', false);
       timer = setTimeout(async () => {
-        const q = input.value.trim();
-        if (q.length < 2) return;
+        const mine = ++seq;
         try {
-          const list = rows(await get(`/api/students?q=${encodeURIComponent(q)}&limit=20`));
-          select.innerHTML = list.length
-            ? list.map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.last_name)} ${escapeHtml(s.first_name)} — ${escapeHtml(s.matricule)}</option>`).join('')
-            : '<option value="">Aucun élève trouvé</option>';
-        } catch (e) { select.innerHTML = `<option value="">${escapeHtml(e.message)}</option>`; }
+          const list = rows(await get(`/api/students?q=${encodeURIComponent(q)}&limit=8`));
+          if (mine !== seq) return;
+          found = list;
+          box.innerHTML = list.length
+            ? list.map((st) => `<button type="button" data-pick="${escapeHtml(st.id)}" class="w-full text-left px-3 py-2 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none flex items-center justify-between gap-3"><span class="text-slate-800">${escapeHtml(st.last_name)} ${escapeHtml(st.first_name)}</span><span class="text-xs text-slate-500 shrink-0">${escapeHtml(st.matricule)}</span></button>`).join('')
+            : '<span class="block px-3 py-2 text-slate-500">Aucun élève trouvé.</span>';
+          box.classList.remove('hidden');
+          setStatus(list.length ? 'Choisissez un élève dans la liste.' : 'Aucun élève ne correspond à cette recherche.', false);
+        } catch (e) { box.classList.add('hidden'); setStatus(e.message, false); }
       }, 250);
+    });
+    box.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('[data-pick]'); if (!btn) return;
+      const st = found.find((x) => x.id === btn.dataset.pick); if (st) pick(st);
     });
   });
 }
@@ -185,9 +207,19 @@ function formModal({ title, fields, values = {}, submit = 'Enregistrer', onSubmi
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const btn = form.querySelector('button:not([type=button])');
+    const data = collectForm(form, fields);
+    const missing = fields.filter((f) => f.required && !(f.name in data)).map((f) => f.label);
+    if (missing.length) { $('modal-error').textContent = `Renseignez : ${missing.join(', ')}.`; return; }
     btn.disabled = true;
-    try { await onSubmit(collectForm(form, fields)); closeModal(true); }
-    catch (e) { $('modal-error').textContent = e.message; btn.disabled = false; }
+    try { await onSubmit(data); closeModal(true); }
+    catch (e) {
+      // Erreurs de champ : chaque message est rattaché au libellé du champ fautif.
+      const named = Array.isArray(e.errors) && e.errors.length
+        ? e.errors.map((x) => { const f = fields.find((ff) => ff.name === x.field); return x.field ? `${f ? f.label : x.field} : ${x.message}` : x.message; })
+        : [e.message];
+      $('modal-error').textContent = named.join(' · ');
+      btn.disabled = false;
+    }
   });
   return p;
 }
@@ -264,10 +296,29 @@ function showView() { dashboardNodes().forEach((n) => n.classList.add('hidden'))
 function setActiveNav(key) {
   document.querySelectorAll('nav [data-module]').forEach((a) => {
     const on = a.dataset.module === key;
-    a.classList.toggle('bg-blue-600', on); a.classList.toggle('text-white', on); a.classList.toggle('shadow-md', on);
-    a.classList.toggle('text-slate-400', !on);
+    a.classList.toggle('is-active', on);
+    if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+  });
+  document.querySelectorAll('[data-group-wrap]').forEach((wrap) => { if (wrap.querySelector('a.is-active')) setNavGroupOpen(wrap, true); });
+}
+
+// Menu à sous-sections : ouverture par groupe, groupe actif ouvert automatiquement, groupes vides masqués.
+function setNavGroupOpen(wrap, open) {
+  const btn = wrap.querySelector('[data-group]'); const panel = wrap.querySelector('.nav-panel'); const chev = wrap.querySelector('.nav-chevron');
+  btn.setAttribute('aria-expanded', String(open)); panel.classList.toggle('hidden', !open); chev.classList.toggle('rotate-90', open);
+}
+function syncNavGroups() {
+  document.querySelectorAll('[data-group-wrap]').forEach((wrap) => {
+    const visible = [...wrap.querySelectorAll('[data-module]')].some((a) => !a.classList.contains('hidden'));
+    wrap.classList.toggle('hidden', !visible);
   });
 }
+document.querySelectorAll('[data-group]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const wrap = btn.closest('[data-group-wrap]');
+    setNavGroupOpen(wrap, btn.getAttribute('aria-expanded') !== 'true');
+  });
+});
 
 function barChart(series) {
   const max = Math.max(1, ...series.map((s) => s.total));
@@ -285,7 +336,7 @@ function barChart(series) {
 }
 
 const ACTION_LABELS = {
-  'auth.login': 'Connexion', 'banner.update': 'Affiche d’accueil publiée', 'banner.text': 'Textes de l’affiche modifiés', 'banner.reset': 'Affiche par défaut rétablie', 'auth.password_change': 'Mot de passe modifié',
+  'auth.login': 'Connexion', 'banner.update': 'Affiche d’accueil publiée', 'banner.text': 'Textes de l’affiche modifiés', 'banner.reset': 'Affiche par défaut rétablie', 'banner.image.add': 'Image ajoutée à l’affiche', 'banner.image.update': 'Cadrage ou image principale de l’affiche modifiés', 'banner.image.order': 'Ordre des images de l’affiche modifié', 'banner.image.delete': 'Image retirée de l’affiche', 'auth.password_change': 'Mot de passe modifié',
   'student.create': 'Élève ajouté', 'student.update': 'Élève modifié', 'student.delete': 'Élève supprimé',
   'payment.create': 'Paiement enregistré', 'grade.create': 'Note saisie', 'attendance.create': 'Présence enregistrée',
   'class.create': 'Classe créée', 'teacher.create': 'Enseignant ajouté', 'tenant.create': 'Établissement créé', 'tenant.update': 'Établissement modifié',
@@ -294,27 +345,73 @@ const ACTION_LABELS = {
   'timetable_slot.create': 'Cours ajouté à l’emploi du temps', 'timetable_slot.delete': 'Cours retiré de l’emploi du temps',
   'academic_period.create': 'Période scolaire créée', 'academic_period.delete': 'Période scolaire supprimée',
   'user.create': 'Utilisateur créé', 'user.update': 'Utilisateur modifié', 'user.password_reset': 'Mot de passe réinitialisé',
-  'report.export_payments': 'Export des paiements', 'book.create': 'Livre ajouté', 'menu.create': 'Menu ajouté', 'transport_route.create': 'Circuit de transport ajouté'
+  'report.export_payments': 'Export des paiements', 'book.create': 'Livre ajouté', 'menu.create': 'Menu ajouté', 'transport_route.create': 'Circuit de transport ajouté',
+  "invoice.create": "Facture familiale créée",
+  "invoice.allocate": "Paiement affecté à une facture",
+  "invoice.unallocate": "Affectation de paiement retirée",
+  "invoice.cancel": "Facture familiale annulée",
+  "invoice.send": "Facture envoyée aux responsables",
+  "fee_structure.create": "Frais ajouté à la grille",
+  "fee_structure.delete": "Frais retiré de la grille",
+  "academic_period.close": "Période scolaire clôturée",
+  "academic_period.reopen": "Période scolaire rouverte",
+  "broadcast.send": "Diffusion envoyée",
+  "broadcast.unpaid": "Relance des impayés envoyée",
+  "conversation.participant_add": "Participant ajouté à la conversation",
+  "conversation.participant_remove": "Participant retiré de la conversation",
+  "document.download": "Document téléchargé",
+  "document.upload": "Document téléversé",
+  "grade.cancel": "Note annulée",
+  "grade.correction_approve": "Correction de note approuvée",
+  "grade.correction_reject": "Correction de note refusée",
+  "grade.correction_request": "Correction de note demandée",
+  "grade.correction_withdraw": "Demande de correction retirée",
+  "grade.export": "Export des notes",
+  "grade.validate": "Notes validées",
+  "notification.settings": "Préférences de notification modifiées",
+  "parent.account_create": "Compte parent créé",
+  "parent.account_delete": "Compte parent supprimé",
+  "parent.preferences": "Préférences parent modifiées",
+  "payment.export": "Export des paiements",
+  "settings.grading": "Barème des notes modifié",
+  "student.export": "Export des élèves",
+  "student.parent_add": "Responsable ajouté à un élève",
+  "student.parent_remove": "Responsable retiré d’un élève",
+  "student.report_comment": "Appréciation de bulletin saisie",
+  "auth.password_change": "Mot de passe modifié"
 };
 function activityText(a) {
   return ACTION_LABELS[a.action] || 'Action enregistrée';
 }
 
 // ---------------------------------------------------------------- Affiche d'accueil
+let schoolName = null;
 const HERO_DEFAULT = { title: $('hero-banner-title').innerHTML, subtitle: $('hero-banner-subtitle').textContent.trim(), src: '/assets/img/banner-default.svg' };
 let bannerBlobUrl = null;
-function setBannerImage(src, custom) {
+let heroUrls = []; let heroSlides = []; let heroIdx = 0; let heroTimer = null;
+function paintHero(i) {
+  if (!heroSlides.length) return;
+  heroIdx = (i + heroSlides.length) % heroSlides.length;
+  const sl = heroSlides[heroIdx];
   const img = $('hero-banner-img');
-  img.src = src;
-  img.classList.toggle('object-right', !custom);
-  img.classList.toggle('object-center', !!custom);
+  img.src = sl.src;
+  img.style.objectPosition = `${sl.fx}% ${sl.fy}%`;
+  [...$('hero-dots').children].forEach((d, k) => { d.classList.toggle('bg-white', k === heroIdx); d.classList.toggle('bg-white/50', k !== heroIdx); });
 }
+function restartHeroTimer() {
+  clearInterval(heroTimer); heroTimer = null;
+  if (heroSlides.length > 1 && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) heroTimer = setInterval(() => paintHero(heroIdx + 1), 6000);
+}
+$('hero-dots').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-slide]'); if (!b) return;
+  paintHero(Number(b.dataset.slide)); restartHeroTimer();
+});
 function applyBannerMeta(m) {
   lastBannerMeta = m;
   const custom = !!(m && m.custom);
   const title = m && m.title; const subtitle = m && m.subtitle;
   const t = $('hero-banner-title'); const sub = $('hero-banner-subtitle');
-  if (title) t.textContent = title; else t.innerHTML = HERO_DEFAULT.title;
+  if (title) t.textContent = title; else if (schoolName) t.innerHTML = `Bienvenue sur <span class="text-amber-300">${escapeHtml(schoolName)}</span>`; else t.innerHTML = HERO_DEFAULT.title;
   sub.textContent = subtitle || HERO_DEFAULT.subtitle;
   // Affiche personnalisée sans texte : l'image s'affiche seule, sans voile ni titre.
   const showTitle = !custom || !!title;
@@ -325,16 +422,25 @@ function applyBannerMeta(m) {
 }
 async function loadBanner() {
   try {
-    const m = (await get('/api/settings/banner')).data;
+    const [m, list] = await Promise.all([get('/api/settings/banner').then((r) => r.data), get('/api/settings/banner/images').then((r) => r.data)]);
     applyBannerMeta(m);
-    if (!m.custom) { setBannerImage(HERO_DEFAULT.src, false); return m; }
-    const res = await fetch('/api/settings/banner/image', { headers: authHeaders() });
-    if (res.ok) {
-      const url = URL.createObjectURL(await res.blob());
-      if (bannerBlobUrl) URL.revokeObjectURL(bannerBlobUrl);
-      bannerBlobUrl = url;
-      setBannerImage(url, true);
+    const slides = []; const urls = [];
+    const items = [...list.items].sort((x, y) => Number(y.is_primary) - Number(x.is_primary));
+    for (const it of items) {
+      const r = await fetch(it.url, { headers: authHeaders() });
+      if (!r.ok) continue;
+      const u = URL.createObjectURL(await r.blob()); urls.push(u);
+      slides.push({ src: u, fx: it.focal_x, fy: it.focal_y });
     }
+    if (!slides.length && m.custom) { // affiche unique héritée (avant la galerie)
+      const r = await fetch('/api/settings/banner/image', { headers: authHeaders() });
+      if (r.ok) { const u = URL.createObjectURL(await r.blob()); urls.push(u); slides.push({ src: u, fx: 50, fy: 50 }); }
+    }
+    if (!slides.length) slides.push({ src: HERO_DEFAULT.src, fx: 100, fy: 50 });
+    heroUrls.forEach((u) => URL.revokeObjectURL(u));
+    heroUrls = urls; heroSlides = slides;
+    $('hero-dots').innerHTML = slides.length > 1 ? slides.map((_, k) => `<button type="button" data-slide="${k}" aria-label="Afficher l’image ${k + 1}" class="w-2.5 h-2.5 rounded-full bg-white/50 hover:bg-white transition"></button>`).join('') : '';
+    paintHero(0); restartHeroTimer();
     return m;
   } catch (e) { return null; /* hors ligne : l'affiche par défaut reste affichée */ }
 }
@@ -439,23 +545,88 @@ async function setupBannerSection(base) {
   });
 }
 
+// Tendance : valeur calculée par le serveur, sinon « Pas de donnée ». onDark : carte colorée (texte blanc).
+function trendPill(v, unit, onDark) {
+  const none = onDark ? 'bg-white/20 text-white' : 'text-slate-400';
+  if (v === null || v === undefined || Number.isNaN(Number(v))) return `<span class="${none} rounded-full px-2 py-0.5 whitespace-nowrap">Pas de donnée</span>`;
+  const n = Number(v);
+  const shown = (Math.round(Math.abs(n) * 10) / 10).toString().replace('.', ',');
+  const up = n > 0, down = n < 0;
+  const cls = onDark ? 'bg-white/20 text-white' : up ? 'text-emerald-600' : down ? 'text-red-600' : 'text-slate-500';
+  const sign = up ? '▲ +' : down ? '▼ −' : '= ';
+  return `<span class="${cls} ${onDark ? 'rounded-full px-2 py-0.5' : ''} whitespace-nowrap">${sign}${shown}${unit === 'pts' ? ' pts' : ' %'}</span>`;
+}
+
+const MONTHS_FR = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+// Courbe des effectifs (cumul mensuel sur 6 mois) — SVG sans bibliothèque.
+function lineChart(series) {
+  const W = 420, H = 210, padL = 36, padR = 14, padT = 16, padB = 30;
+  const max = Math.max(1, ...series.map((s) => s.total));
+  const step = (W - padL - padR) / Math.max(1, series.length - 1);
+  const pts = series.map((s, i) => ({ x: padL + i * step, y: padT + (H - padT - padB) * (1 - s.total / max), s }));
+  const path = pts.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const base = H - padB;
+  const area = `${path} L${pts[pts.length - 1].x.toFixed(1)},${base} L${pts[0].x.toFixed(1)},${base} Z`;
+  const grid = [0, 0.5, 1].map((f) => { const y = padT + (H - padT - padB) * (1 - f); return `<line x1="${padL}" x2="${W - padR}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#e2e8f0"/><text x="${padL - 6}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="#94a3b8">${fmtNumber(Math.round(max * f))}</text>`; }).join('');
+  const dots = pts.map((p) => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4" fill="#fff" stroke="#2563eb" stroke-width="2"><title>${escapeHtml(MONTHS_FR[Number(p.s.month.slice(5, 7)) - 1])} ${p.s.month.slice(0, 4)} : ${fmtNumber(p.s.total)} élèves</title></circle>`).join('');
+  const labels = pts.map((p) => `<text x="${p.x.toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="11" fill="#64748b">${escapeHtml(MONTHS_FR[Number(p.s.month.slice(5, 7)) - 1])}</text>`).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" class="w-full h-full" role="presentation"><defs><linearGradient id="enrolGrad" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#2563eb" stop-opacity=".28"/><stop offset="1" stop-color="#2563eb" stop-opacity="0"/></linearGradient></defs>${grid}<path d="${area}" fill="url(#enrolGrad)"/><path d="${path}" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linejoin="round"/>${dots}${labels}</svg>`;
+}
+
+const LEVEL_COLORS = ['#2563eb', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#ef4444', '#64748b', '#ec4899'];
+// Anneau de répartition par niveau — SVG à tirets, sans bibliothèque.
+function donutChart(rows) {
+  const total = rows.reduce((a, r) => a + r.count, 0);
+  const C = 2 * Math.PI * 60; let offset = 0;
+  const arcs = rows.map((r, i) => {
+    const len = (r.count / total) * C;
+    const arc = `<circle cx="80" cy="80" r="60" fill="none" stroke="${LEVEL_COLORS[i % LEVEL_COLORS.length]}" stroke-width="22" stroke-dasharray="${len.toFixed(2)} ${(C - len).toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 80 80)"><title>${escapeHtml(r.level || 'Non renseigné')} : ${r.count}</title></circle>`;
+    offset += len; return arc;
+  }).join('');
+  return `<svg viewBox="0 0 160 160" class="w-full h-full" role="presentation"><circle cx="80" cy="80" r="60" fill="none" stroke="#f1f5f9" stroke-width="22"/>${arcs}<text x="80" y="78" text-anchor="middle" font-size="20" font-weight="700" fill="#0f172a">${fmtNumber(total)}</text><text x="80" y="96" text-anchor="middle" font-size="10" fill="#64748b">élèves</text></svg>`;
+}
+
+const RTF = new Intl.RelativeTimeFormat('fr', { numeric: 'auto' });
+function relTime(iso) {
+  const diff = (new Date(iso).getTime() - Date.now()) / 1000;
+  if (Math.abs(diff) < 60) return 'à l’instant';
+  for (const [unit, sec] of [['day', 86400], ['hour', 3600], ['minute', 60]]) if (Math.abs(diff) >= sec) return RTF.format(Math.round(diff / sec), unit);
+  return 'à l’instant';
+}
+
 async function loadDashboard() {
   loadBanner();
   try {
     const d = (await get('/api/stats/dashboard')).data;
+    schoolName = d.school_name || null;
+    if (!lastBannerMeta || !lastBannerMeta.title) applyBannerMeta(lastBannerMeta || {});
+    const t = d.trends || {};
     $('metric-students').textContent = fmtNumber(d.students);
     $('metric-teachers').textContent = fmtNumber(d.teachers);
     $('metric-classes').textContent = fmtNumber(d.classes);
+    $('metric-payments').textContent = money(d.payments_month.total);
+    $('trend-students').innerHTML = trendPill(t.students, '%', true);
+    $('trend-teachers').innerHTML = trendPill(t.teachers, '%', true);
+    $('trend-classes').innerHTML = trendPill(t.classes, '%', true);
+    $('trend-payments').innerHTML = trendPill(t.payments, '%', true);
     $('metric-grades').textContent = fmtNumber(d.grades);
     $('metric-attendance').textContent = d.attendance_rate === null ? '—' : `${String(d.attendance_rate).replace('.', ',')} %`;
-    $('metric-payments').textContent = money(d.payments_month.total);
+    $('trend-attendance').innerHTML = trendPill(t.attendance, 'pts', false);
+    const series = d.enrolment_series || [];
+    $('enrolment-chart').innerHTML = series.some((s) => s.total > 0) ? lineChart(series)
+      : '<p class="h-full flex items-center justify-center text-sm text-slate-400 text-center px-6">Pas de donnée</p>';
+    const levels = (d.level_distribution || []).filter((r) => r.count > 0);
+    const lt = levels.reduce((a, r) => a + r.count, 0);
+    $('level-chart').innerHTML = lt ? donutChart(levels) : '<p class="h-full flex items-center justify-center text-sm text-slate-400 text-center">Pas de donnée</p>';
+    $('level-legend').innerHTML = levels.length ? levels.map((r, i) => `<li class="flex items-center justify-between gap-2"><span class="flex items-center gap-2 min-w-0"><span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${LEVEL_COLORS[i % LEVEL_COLORS.length]}"></span><span class="truncate text-slate-700">${escapeHtml(r.level || 'Non renseigné')}</span></span><span class="font-semibold text-ink whitespace-nowrap">${fmtNumber(r.count)} <span class="font-normal text-slate-400">· ${Math.round((r.count / lt) * 100)} %</span></span></li>`).join('')
+      : '<li class="text-slate-400">Pas de donnée</li>';
     $('payments-chart').innerHTML = d.payments_series.some((s) => s.total > 0) ? barChart(d.payments_series)
       : '<p class="h-full flex items-center justify-center text-sm text-slate-400 text-center px-6">Aucun encaissement sur les 6 derniers mois.</p>';
     const body = $('recent-payments');
     body.innerHTML = d.recent_payments.length ? d.recent_payments.map((p, i) => `<tr><td class="py-2.5 text-slate-400">${i + 1}</td><td class="py-2.5">${escapeHtml(p.student_name)}</td><td class="py-2.5">${money(p.amount)}</td><td class="py-2.5 text-slate-500">${displayDate(p.paid_at)}</td><td class="py-2.5 text-right"><span class="px-2.5 py-0.5 rounded-full ${p.status === 'paye' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">${escapeHtml(label(p.status))}</span></td></tr>`).join('')
       : '<tr><td colspan="5" class="py-6 text-center text-slate-400">Aucun paiement enregistré.</td></tr>';
     $('recent-activities').innerHTML = d.recent_activity.length
-      ? d.recent_activity.map((a) => `<div class="flex items-center justify-between border-b border-slate-100 pb-2"><span class="text-slate-700 font-medium">${escapeHtml(activityText(a))}</span><span class="text-slate-400">${escapeHtml(a.user_name || 'Système')} · ${new Date(a.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</span></div>`).join('')
+      ? d.recent_activity.map((a) => `<div class="flex items-start gap-3 border-b border-slate-100 pb-2.5 last:border-0"><span class="mt-0.5 w-7 h-7 rounded-lg bg-blue-50 text-royal-600 flex items-center justify-center text-xs shrink-0"><i class="fa-solid fa-circle-check"></i></span><div class="min-w-0"><p class="text-ink font-medium truncate">${escapeHtml(activityText(a))}</p><p class="text-xs text-slate-400">${escapeHtml(a.user_name || 'Système')} · ${relTime(a.created_at)}</p></div></div>`).join('')
       : '<p>Aucune activité enregistrée pour le moment.</p>';
   } catch (e) {
     ['metric-students', 'metric-teachers', 'metric-classes', 'metric-grades', 'metric-attendance', 'metric-payments'].forEach((id) => { $(id).textContent = 'N/D'; });
@@ -463,6 +634,131 @@ async function loadDashboard() {
     $('recent-payments').innerHTML = '<tr><td colspan="5" class="py-6 text-center text-red-500">Impossible de charger les paiements.</td></tr>';
     $('recent-activities').innerHTML = '<p class="text-red-500">Impossible de charger les activités.</p>';
   }
+}
+
+// ---------------------------------------------------------------- Gestionnaire de l'affiche (établissement, paramètres)
+function bannerManagerHtml() {
+  return `<section id="banner-section" class="${CARD}">
+    <h3 class="font-bold mb-1">Affiche d’accueil</h3>
+    <p class="text-sm text-slate-500 mb-3">Jusqu’à 6 images, affichées en diaporama sur le tableau de bord. L’image principale s’affiche en premier. Cliquez sur une image pour choisir le point à garder visible.</p>
+    <ul id="bm-reqs" class="mb-4 text-xs text-slate-600 grid sm:grid-cols-2 gap-x-6 gap-y-1 list-disc pl-5"></ul>
+    <div id="bm-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+    <div class="mt-4 flex flex-wrap items-center gap-3">
+      <input id="bm-file" type="file" accept="image/png,image/jpeg,image/webp" class="hidden">
+      <button id="bm-add" type="button" class="px-4 py-2 rounded-lg bg-royal-600 hover:bg-royal-500 text-white text-sm font-semibold disabled:opacity-50"><i class="fa-solid fa-plus mr-1"></i>Ajouter une image…</button>
+      <span id="bm-count" class="text-xs text-slate-500"></span>
+    </div>
+    <div id="bm-errors" class="mt-3 hidden rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm p-3" role="alert"></div>
+    <div class="mt-4 grid sm:grid-cols-2 gap-3">
+      <label class="text-sm font-medium text-slate-700">Titre (facultatif)<input id="bm-title" maxlength="120" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Bienvenue sur SCHOOL MANAGER PRO !"></label>
+      <label class="text-sm font-medium text-slate-700">Sous-titre (facultatif)<input id="bm-subtitle" maxlength="240" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Gérez votre établissement scolaire en toute simplicité."></label>
+    </div>
+    <div class="mt-3 flex flex-wrap gap-2">
+      <button id="bm-text-save" type="button" class="px-4 py-2 rounded-lg border border-royal-600 text-royal-600 text-sm font-semibold hover:bg-blue-50">Enregistrer les textes</button>
+      <button id="bm-clear" type="button" class="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50">Supprimer toutes les images</button>
+    </div>
+  </section>`;
+}
+
+async function setupBannerManager() {
+  let items = []; let max = 6; let req = null; let blobs = {};
+  const showErrors = (list) => { const box = $('bm-errors'); box.classList.toggle('hidden', !list.length); box.innerHTML = list.length ? `<strong>Action refusée :</strong><ul class="list-disc pl-5 mt-1">${list.map((e) => `<li>${escapeHtml(e)}</li>`).join('')}</ul>` : ''; };
+  const revoke = () => { Object.values(blobs).forEach((u) => URL.revokeObjectURL(u)); blobs = {}; };
+  const tile = (it, i) => {
+    const fx = Math.min(100, Math.max(0, it.focal_x)); const fy = Math.min(100, Math.max(0, it.focal_y));
+    return `<article class="rounded-xl border ${it.is_primary ? 'border-royal-600 ring-2 ring-royal-600/20' : 'border-slate-200'} bg-white overflow-hidden">
+      <button type="button" data-bm="focal" data-id="${it.id}" class="relative block w-full aspect-[4/1] bg-slate-100" title="Cliquer pour choisir le point visible">
+        <img src="${blobs[it.id] || ''}" alt="Image ${i + 1}" class="w-full h-full object-cover pointer-events-none" style="object-position:${fx}% ${fy}%">
+        <span class="absolute w-3.5 h-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white ring-2 ring-royal-600 shadow pointer-events-none" style="left:${fx}%;top:${fy}%"></span>
+      </button>
+      <div class="flex items-center justify-between gap-2 p-2.5 text-xs">
+        <span class="font-semibold ${it.is_primary ? 'text-royal-600' : 'text-slate-600'}">${it.is_primary ? '<i class="fa-solid fa-star"></i> Principale' : `Image ${i + 1}`}</span>
+        <div class="flex items-center gap-1">
+          <button type="button" data-bm="up" data-id="${it.id}" aria-label="Monter" ${i === 0 ? 'disabled' : ''} class="w-7 h-7 rounded-md hover:bg-slate-100 disabled:opacity-30"><i class="fa-solid fa-arrow-up"></i></button>
+          <button type="button" data-bm="down" data-id="${it.id}" aria-label="Descendre" ${i === items.length - 1 ? 'disabled' : ''} class="w-7 h-7 rounded-md hover:bg-slate-100 disabled:opacity-30"><i class="fa-solid fa-arrow-down"></i></button>
+          ${it.is_primary ? '' : `<button type="button" data-bm="primary" data-id="${it.id}" aria-label="Définir comme principale" class="w-7 h-7 rounded-md hover:bg-slate-100 text-amber-500"><i class="fa-regular fa-star"></i></button>`}
+          <button type="button" data-bm="delete" data-id="${it.id}" aria-label="Supprimer cette image" class="w-7 h-7 rounded-md hover:bg-red-50 text-red-600"><i class="fa-regular fa-trash-can"></i></button>
+        </div>
+      </div>
+    </article>`;
+  };
+  const render = () => {
+    $('bm-count').textContent = `${items.length} / ${max} image${items.length > 1 ? 's' : ''}`;
+    $('bm-add').disabled = items.length >= max;
+    $('bm-grid').innerHTML = items.length ? items.map(tile).join('')
+      : '<p class="sm:col-span-2 xl:col-span-3 text-sm text-slate-400 py-8 text-center border border-dashed border-slate-300 rounded-xl">Aucune image : l’affiche par défaut est utilisée.</p>';
+  };
+  const refresh = async () => {
+    const data = (await get('/api/settings/banner/images')).data;
+    items = data.items; max = data.max; req = data.requirements;
+    const meta = (await get('/api/settings/banner')).data;
+    if (document.activeElement !== $('bm-title')) $('bm-title').value = meta.title || '';
+    if (document.activeElement !== $('bm-subtitle')) $('bm-subtitle').value = meta.subtitle || '';
+    $('bm-reqs').innerHTML = [
+      `Format : ${req.ratio}:1 (ex. 1600×400 px)`, `Tolérance : ±${Math.round(req.ratioTolerance * 100)} % sur les proportions`,
+      `Taille minimale : ${req.minWidth}×${req.minHeight} px`, `Taille maximale : ${req.maxWidth}×${req.maxHeight} px`,
+      'Types : PNG, JPEG ou WebP', `Poids maximal : ${req.maxBytes / 1048576} Mo`].map((t) => `<li>${t}</li>`).join('');
+    revoke();
+    await Promise.all(items.map(async (it) => { const r = await fetch(it.url, { headers: authHeaders() }); if (r.ok) blobs[it.id] = URL.createObjectURL(await r.blob()); }));
+    render();
+  };
+  const afterChange = () => { loadBanner(); };
+
+  $('bm-add').addEventListener('click', () => $('bm-file').click());
+  $('bm-file').addEventListener('change', async () => {
+    const file = $('bm-file').files[0];
+    showErrors([]);
+    if (!file) return;
+    if (items.length >= max) { showErrors([`Limite atteinte : ${max} images maximum par établissement.`]); $('bm-file').value = ''; return; }
+    const r = await checkImageFile(file, req, 'l’image');
+    if (r.errors.length) { showErrors(r.errors); $('bm-file').value = ''; return; }
+    try {
+      const res = await fetch('/api/settings/banner/images', { method: 'POST', headers: { ...authHeaders(), 'Content-Type': file.type }, body: file });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { showErrors(Array.isArray(data.errors) && data.errors.length ? data.errors : [data.error || `Erreur HTTP ${res.status}`]); return; }
+      await refresh(); afterChange(); toast('Image ajoutée à l’affiche.');
+    } catch (e) { showErrors(['Serveur injoignable. Vérifiez votre connexion.']); }
+    finally { $('bm-file').value = ''; }
+  });
+
+  $('bm-grid').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-bm]'); if (!btn || btn.disabled) return;
+    const id = btn.dataset.id; const idx = items.findIndex((i) => i.id === id); const act = btn.dataset.bm;
+    showErrors([]);
+    try {
+      if (act === 'focal') {
+        const rc = btn.getBoundingClientRect();
+        const clamp = (v) => Math.min(100, Math.max(0, Math.round(v * 100) / 100));
+        await api('PUT', `/api/settings/banner/images/${id}`, { focal_x: clamp(((e.clientX - rc.left) / rc.width) * 100), focal_y: clamp(((e.clientY - rc.top) / rc.height) * 100) });
+      } else if (act === 'primary') {
+        await api('PUT', `/api/settings/banner/images/${id}`, { is_primary: true });
+      } else if (act === 'up' || act === 'down') {
+        const j = act === 'up' ? idx - 1 : idx + 1;
+        const ids = items.map((i) => i.id); [ids[idx], ids[j]] = [ids[j], ids[idx]];
+        await api('PUT', '/api/settings/banner/images/order', { ids });
+      } else if (act === 'delete') {
+        if (!(await confirmDialog('Supprimer cette image', 'Elle ne sera plus affichée sur le tableau de bord.'))) return;
+        await api('DELETE', `/api/settings/banner/images/${id}`);
+      }
+      await refresh(); afterChange();
+    } catch (err) { showErrors([err.message]); }
+  });
+
+  $('bm-text-save').addEventListener('click', async () => {
+    try { await api('PUT', '/api/settings/banner/text', { title: $('bm-title').value.trim(), subtitle: $('bm-subtitle').value.trim() }); afterChange(); toast('Textes enregistrés.'); }
+    catch (e) { toast(e.message, 'err'); }
+  });
+
+  $('bm-clear').addEventListener('click', async () => {
+    if (!items.length) { showErrors(['Aucune image à supprimer.']); return; }
+    if (!(await confirmDialog('Supprimer toutes les images', `Les ${items.length} images de l’affiche seront supprimées. L’affiche par défaut sera utilisée.`))) return;
+    try {
+      for (const it of items) await api('DELETE', `/api/settings/banner/images/${it.id}`);
+      await refresh(); afterChange(); toast('Affiche par défaut rétablie.');
+    } catch (e) { showErrors([e.message]); await refresh(); afterChange(); }
+  });
+
+  await refresh();
 }
 
 async function loadHealth() {
@@ -549,6 +845,7 @@ async function openModule(key, opts = {}) {
   if (key === 'timetable') return openTimetable(opts);
   if (key === 'reports') return openReports();
   if (key === 'settings') return openSettings();
+  if (key === 'invoices') return openInvoices(opts);
   if (!cfg) { moduleView.innerHTML = '<p class="p-6 text-slate-500">Section inconnue.</p>'; return; }
   const EXPORTABLE = { students: 'eleves.csv', grades: 'notes.csv', payments: 'paiements.csv' };
   if (listState.key !== key) { listState.key = key; listState.offset = 0; listState.q = ''; }
@@ -558,13 +855,13 @@ async function openModule(key, opts = {}) {
     const scoreField = cfg.fields.find((f) => f.name === 'score');
     if (scoreField) scoreField.label = `Note (sur ${gradeScaleMax})`;
   }
-  moduleView.innerHTML = `<div class="flex flex-wrap items-center justify-between gap-3"><div><p class="text-sm text-slate-500">Gestion scolaire</p><h2 class="text-2xl font-bold text-slate-900">${cfg.title}</h2></div>
+  moduleView.innerHTML = `<div class="flex flex-wrap items-center justify-between gap-3"><div><p class="text-sm text-slate-500">Gestion scolaire</p><h2 class="text-2xl font-bold text-ink">${cfg.title}</h2></div>
     <div class="flex flex-wrap gap-2">${cfg.search ? '<input id="module-q" type="search" placeholder="Nom ou matricule…" class="w-full sm:w-auto rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" aria-label="Filtrer la liste">' : ''}
     <button id="module-refresh" class="px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 text-sm font-semibold"><i class="fa-solid fa-rotate mr-2"></i>Actualiser</button>
     ${cfg.endpoint && EXPORTABLE[key] ? '<button id="module-export" class="px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 text-sm font-semibold"><i class="fa-solid fa-file-excel mr-2"></i>Exporter</button>' : ''}
-    ${writable ? '<button id="module-add" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-2"></i>Ajouter</button>' : ''}</div></div>
-    <section class="bg-white rounded-2xl border border-slate-200 p-5"><div class="flex justify-between items-center mb-4"><h3 class="font-bold">Liste</h3><span id="module-count" class="text-xs text-slate-500">Chargement…</span></div>
-    <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-xs text-slate-500 border-b">${cfg.columns.map((c) => `<th class="py-3 pr-4">${c[1]}</th>`).join('')}${key === 'students' && writable ? '<th class="py-3 pr-2">Actions</th>' : key === 'students' ? '<th class="py-3 pr-2">Dossier</th>' : key === 'payments' ? '<th class="py-3 pr-2">PDF</th>' : key === 'documents' ? '<th class="py-3 pr-2">Action</th>' : key === 'grades' ? '<th class="py-3 pr-2">Actions</th>' : ''}</tr></thead>
+    ${writable ? '<button id="module-add" class="px-4 py-2 rounded-xl bg-royal-600 hover:bg-royal-500 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-2"></i>Ajouter</button>' : ''}</div></div>
+    <section class="panel p-5"><div class="flex justify-between items-center mb-4"><h3 class="font-bold text-ink">Liste</h3><span id="module-count" class="text-xs text-slate-500">Chargement…</span></div>
+    <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 border-y border-slate-200">${cfg.columns.map((c) => `<th class="py-3 px-3 first:pl-4">${c[1]}</th>`).join('')}${key === 'students' && writable ? '<th class="py-3 pr-2">Actions</th>' : key === 'students' ? '<th class="py-3 pr-2">Dossier</th>' : key === 'payments' ? '<th class="py-3 pr-2">PDF</th>' : key === 'documents' ? '<th class="py-3 pr-2">Action</th>' : key === 'grades' ? '<th class="py-3 pr-2">Actions</th>' : ''}</tr></thead>
     <tbody id="module-rows"></tbody></table></div>
     <div class="flex items-center justify-between mt-4"><button id="page-prev" class="text-sm text-blue-600 disabled:text-slate-300">← Précédent</button><span id="page-info" class="text-xs text-slate-500"></span><button id="page-next" class="text-sm text-blue-600 disabled:text-slate-300">Suivant →</button></div>
     <p id="module-error" class="text-sm text-red-600 mt-3" role="alert"></p></section>`;
@@ -582,7 +879,7 @@ async function openModule(key, opts = {}) {
       $('page-prev').disabled = listState.offset === 0;
       $('page-next').disabled = listState.offset + data.length >= total;
       const myPending = key === 'grades' ? Object.fromEntries(rows(await get('/api/grades/corrections/mine')).map((c) => [c.grade_id, c.id])) : {};
-      tbody.innerHTML = data.length ? data.map((item) => `<tr class="border-b border-slate-100 hover:bg-slate-50">${cfg.columns.map(([k, , fmt]) => `<td class="py-3 pr-4 text-slate-700">${renderCell(item[k], fmt)}</td>`).join('')}${key === 'students'
+      tbody.innerHTML = data.length ? data.map((item) => `<tr class="border-b border-slate-100 hover:bg-slate-50/70">${cfg.columns.map(([k, , fmt]) => `<td class="py-3 px-3 first:pl-4 text-slate-700 whitespace-nowrap">${renderCell(item[k], fmt)}</td>`).join('')}${key === 'students'
         ? `<td class="py-3 pr-2 whitespace-nowrap"><button type="button" data-act="profile" data-id="${escapeHtml(item.id)}" class="text-emerald-700 hover:underline mr-3">Dossier</button>${writable ? `<button type="button" data-act="edit" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline mr-3">Modifier</button><button type="button" data-act="delete" data-id="${escapeHtml(item.id)}" class="text-red-600 hover:underline">Supprimer</button>` : ''}</td>` : key === 'payments' ? `<td class="py-3 pr-2">${item.status === 'paye' ? `<button type="button" data-act="receipt" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline"><i class="fa-solid fa-file-pdf mr-1"></i>Reçu</button>` : ''}</td>` : key === 'documents' ? `<td class="py-3 pr-2 whitespace-nowrap">${item.original_name ? `<button type="button" data-act="download" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline mr-3">Télécharger</button>` : ''}${writable && !item.original_name ? `<button type="button" data-act="upload" data-id="${escapeHtml(item.id)}" class="text-emerald-700 hover:underline">Joindre un fichier</button>` : ''}</td>` : key === 'grades' ? `<td class="py-3 pr-2 whitespace-nowrap">${item.status === 'saisie' && session.user.role === 'admin' ? `<button type="button" data-act="validate" data-id="${escapeHtml(item.id)}" class="text-emerald-700 hover:underline mr-3">Valider</button><button type="button" data-act="cancel" data-id="${escapeHtml(item.id)}" class="text-red-600 hover:underline">Annuler</button>` : ''}${item.status === 'validee' && writable ? (myPending[item.id] ? `<button type="button" data-act="withdraw" data-id="${escapeHtml(item.id)}" data-cid="${escapeHtml(myPending[item.id])}" class="text-slate-600 hover:underline">Retirer ma demande</button>` : `<button type="button" data-act="correct" data-id="${escapeHtml(item.id)}" class="text-blue-600 hover:underline">Corriger</button>`) : ''}</td>` : ''}</tr>`).join('')
         : `<tr><td colspan="${colSpan}" class="py-8 text-center text-slate-400">Aucun enregistrement.</td></tr>`;
       if (key === 'payments') {
@@ -804,7 +1101,7 @@ async function openTimetable(opts = {}) {
 
 // ---------------------------------------------------------------- Rapports
 function reportTable(title, headers, items, render, empty = 'Aucune donnée.') {
-  return `<section class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-3">${title}</h3><table class="w-full text-sm text-left"><thead><tr class="text-xs text-slate-500 border-b">${headers.map((h) => `<th class="py-2 pr-3">${h}</th>`).join('')}</tr></thead><tbody>${items.length ? items.map(render).join('') : `<tr><td colspan="${headers.length}" class="py-4 text-center text-slate-400">${empty}</td></tr>`}</tbody></table></section>`;
+  return `<section class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-3">${title}</h3><table class="w-full text-sm text-left"><thead><tr class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 border-y border-slate-200">${headers.map((h) => `<th class="py-3 px-3 first:pl-4">${h}</th>`).join('')}</tr></thead><tbody>${items.length ? items.map(render).join('') : `<tr><td colspan="${headers.length}" class="py-4 text-center text-slate-400">${empty}</td></tr>`}</tbody></table></section>`;
 }
 async function openReports() {
   moduleView.innerHTML = '<p class="p-6 text-slate-500">Chargement des rapports…</p>';
@@ -851,7 +1148,7 @@ function permissionsSectionHtml() {
 async function setupPermissions() {
   let data = (await get('/api/settings/permissions')).data;
   const draw = () => {
-    $('perm-table').innerHTML = `<thead><tr class="text-xs text-slate-500 border-b"><th class="py-2 pr-3">Module</th>${data.roles.map((r) => `<th class="py-2 pr-3">${escapeHtml(ROLE_LABELS[r] || r)}</th>`).join('')}</tr></thead><tbody>${Object.entries(data.modules).map(([m, label]) => `<tr class="border-b border-slate-100"><td class="py-2 pr-3 font-medium text-slate-800">${escapeHtml(label)}</td>${data.roles.map((r) => `<td class="py-1.5 pr-3"><select data-perm-role="${r}" data-perm-module="${m}" aria-label="${escapeHtml(`${label} — ${ROLE_LABELS[r] || r}`)}" class="rounded-lg border px-2 py-1.5 text-xs ${data.matrix[r][m] !== data.defaults[r][m] ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'}">${data.levels.map((l) => `<option value="${l}" ${data.matrix[r][m] === l ? 'selected' : ''}>${LEVEL_LABELS[l]}</option>`).join('')}</select></td>`).join('')}</tr>`).join('')}</tbody>`;
+    $('perm-table').innerHTML = `<thead><tr class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 border-y border-slate-200"><th class="py-3 px-3 first:pl-4">Module</th>${data.roles.map((r) => `<th class="py-3 px-3 first:pl-4">${escapeHtml(ROLE_LABELS[r] || r)}</th>`).join('')}</tr></thead><tbody>${Object.entries(data.modules).map(([m, label]) => `<tr class="border-b border-slate-100"><td class="py-2 pr-3 font-medium text-slate-800">${escapeHtml(label)}</td>${data.roles.map((r) => `<td class="py-1.5 pr-3"><select data-perm-role="${r}" data-perm-module="${m}" aria-label="${escapeHtml(`${label} — ${ROLE_LABELS[r] || r}`)}" class="rounded-lg border px-2 py-1.5 text-xs ${data.matrix[r][m] !== data.defaults[r][m] ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'}">${data.levels.map((l) => `<option value="${l}" ${data.matrix[r][m] === l ? 'selected' : ''}>${LEVEL_LABELS[l]}</option>`).join('')}</select></td>`).join('')}</tr>`).join('')}</tbody>`;
   };
   draw();
   $('perm-table').addEventListener('change', async (e) => {
@@ -883,11 +1180,11 @@ async function openSettings() {
       <p class="mt-2 text-sm">Nom : <strong id="tenant-name">${escapeHtml(tenant.name)}</strong> ${isAdmin ? '<button id="tenant-edit" class="ml-2 text-blue-600 hover:underline text-sm">Modifier</button>' : ''}</p></section>
     <section class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-3">Mon compte</h3><p class="text-sm text-slate-500">${escapeHtml(session.user.email)} · ${escapeHtml(ROLE_LABELS[session.user.role] || session.user.role)}</p><button id="pwd-btn" class="mt-3 px-4 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700">Changer mon mot de passe</button></section>
     ${isAdmin ? gradingSectionHtml() : ''}
-    ${isAdmin ? bannerSectionHtml() + identitySectionHtml(false) + subscriptionSectionHtml() + permissionsSectionHtml() : ''}
+    ${isAdmin ? bannerManagerHtml() + identitySectionHtml(false) + subscriptionSectionHtml() + permissionsSectionHtml() : ''}
     ${canReopen ? `<section class="bg-white rounded-2xl border border-slate-200 p-5"><div class="flex items-center justify-between mb-3"><h3 class="font-bold">Périodes scolaires (trimestres)</h3>${isAdmin ? `<button id="period-add" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-2"></i>Ajouter</button>` : ''}</div><div id="periods-list" class="text-sm space-y-2"></div><p class="mt-3 text-xs text-slate-400">Les périodes servent à filtrer les bulletins.</p></section>
     ${isAdmin ? `<section id="corrections-card" class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-3">Corrections de notes en attente</h3><div id="corrections-list" class="text-sm"></div></section>` : ''}
     <section class="bg-white rounded-2xl border border-slate-200 p-5"><div class="flex items-center justify-between mb-3"><h3 class="font-bold">Utilisateurs</h3><button id="user-add" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"><i class="fa-solid fa-plus mr-2"></i>Ajouter</button></div>
-      <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-xs text-slate-500 border-b"><th class="py-2 pr-3">Nom</th><th class="py-2 pr-3">E-mail</th><th class="py-2 pr-3">Rôle</th><th class="py-2 pr-3">Dernière connexion</th><th class="py-2 pr-3">Statut</th><th class="py-2"></th></tr></thead><tbody id="users-rows"></tbody></table></div>
+      <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 border-y border-slate-200"><th class="py-3 px-3 first:pl-4">Nom</th><th class="py-3 px-3 first:pl-4">E-mail</th><th class="py-3 px-3 first:pl-4">Rôle</th><th class="py-3 px-3 first:pl-4">Dernière connexion</th><th class="py-3 px-3 first:pl-4">Statut</th><th class="py-2"></th></tr></thead><tbody id="users-rows"></tbody></table></div>
       <p class="mt-3 text-xs text-slate-400">Un compte désactivé est déconnecté immédiatement. Un changement de rôle s’applique dès la requête suivante.</p></section>` : ''}`;
   $('pwd-btn').addEventListener('click', async () => {
     const ok = await formModal({ title: 'Changer mon mot de passe', fields: [{ name: 'current_password', label: 'Mot de passe actuel', type: 'password', required: true }, { name: 'new_password', label: 'Nouveau mot de passe (8 caractères minimum)', type: 'password', required: true }], onSubmit: (v) => api('POST', '/api/auth/password', v) });
@@ -895,7 +1192,7 @@ async function openSettings() {
   });
   if (!canReopen) return;
   if (isAdmin) {
-  setupBannerSection('/api/settings/banner').catch((e) => toast(e.message, 'err'));
+  setupBannerManager().catch((e) => toast(e.message, 'err'));
   setupIdentitySection('/api/settings/identity').catch((e) => toast(e.message, 'err'));
   setupSubscription().catch((e) => toast(e.message, 'err'));
   setupPermissions().catch((e) => toast(e.message, 'err'));
@@ -999,7 +1296,7 @@ async function openSettings() {
 
 // ---------------------------------------------------------------- Dossier individuel
 function profileTable(title, headers, items, renderRow) {
-  return `<section class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-3">${title}</h3><div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="border-b text-slate-500">${headers.map((h) => `<th class="py-2 pr-3">${h}</th>`).join('')}</tr></thead><tbody>${items.length ? items.map(renderRow).join('') : `<tr><td colspan="${headers.length}" class="py-4 text-slate-400 text-center">Aucune donnée enregistrée.</td></tr>`}</tbody></table></div></section>`;
+  return `<section class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-3">${title}</h3><div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="border-b text-slate-500">${headers.map((h) => `<th class="py-3 px-3 first:pl-4">${h}</th>`).join('')}</tr></thead><tbody>${items.length ? items.map(renderRow).join('') : `<tr><td colspan="${headers.length}" class="py-4 text-slate-400 text-center">Aucune donnée enregistrée.</td></tr>`}</tbody></table></div></section>`;
 }
 async function openStudentProfile(id) {
   showView();
@@ -1131,7 +1428,7 @@ async function openReportCard(id, range = {}, portal = false) {
     moduleView.innerHTML = `<div class="flex flex-wrap items-end justify-between gap-3"><div><button id="card-back" class="no-print text-sm text-blue-600 mb-2">← Retour au dossier</button><p class="text-sm text-slate-500">Bulletin de notes${s.school_year ? ` · ${escapeHtml(s.school_year)}` : ''}</p><h2 class="text-2xl font-bold">${escapeHtml(s.first_name)} ${escapeHtml(s.last_name)}</h2><p class="text-sm text-slate-500">Matricule ${escapeHtml(s.matricule)} · ${escapeHtml(s.class_name || 'Sans classe')}</p></div>
       <div class="no-print flex flex-wrap gap-2 items-end">${periods.length ? `<label class="text-xs font-semibold text-slate-600">Période<select id="card-period" class="${INPUT_CLS}"><option value="">Personnalisée</option>${periods.map((p) => `<option value="${escapeHtml(p.start_date)}|${escapeHtml(p.end_date)}" ${p.start_date === range.from && p.end_date === range.to ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}</select></label>` : ''}<label class="text-xs font-semibold text-slate-600">Du<input id="card-from" type="date" value="${escapeHtml(range.from || '')}" class="${INPUT_CLS}"></label><label class="text-xs font-semibold text-slate-600">Au<input id="card-to" type="date" value="${escapeHtml(range.to || '')}" class="${INPUT_CLS}"></label>
       <button id="card-apply" class="px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-700">Appliquer</button><button id="card-pdf" class="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold"><i class="fa-solid fa-file-pdf mr-2"></i>Télécharger le PDF</button><button id="card-print" class="px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-700">Imprimer</button></div></div>
-      <section class="bg-white rounded-2xl border border-slate-200 p-5"><div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-xs text-slate-500 border-b"><th class="py-2 pr-3">Matière</th><th class="py-2 pr-3">Coef.</th><th class="py-2 pr-3">Notes</th><th class="py-2 pr-3">Moyenne /20</th><th class="py-2">Appréciation</th></tr></thead><tbody>${d.subjects.length ? d.subjects.map((x) => `<tr class="border-b"><td class="py-2 pr-3">${escapeHtml(x.subject)}</td><td class="py-2 pr-3">${fmtNumber(x.coefficient)}</td><td class="py-2 pr-3">${fmtNumber(x.notes)}</td><td class="py-2 pr-3 font-semibold">${avg(x.average)}</td><td class="py-2">${escapeHtml(x.mention || '—')}</td></tr>`).join('') : '<tr><td colspan="5" class="py-6 text-center text-slate-400">Aucune note sur cette période.</td></tr>'}</tbody></table></div></section>
+      <section class="bg-white rounded-2xl border border-slate-200 p-5"><div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 border-y border-slate-200"><th class="py-3 px-3 first:pl-4">Matière</th><th class="py-3 px-3 first:pl-4">Coef.</th><th class="py-3 px-3 first:pl-4">Notes</th><th class="py-3 px-3 first:pl-4">Moyenne /20</th><th class="py-2">Appréciation</th></tr></thead><tbody>${d.subjects.length ? d.subjects.map((x) => `<tr class="border-b"><td class="py-2 pr-3">${escapeHtml(x.subject)}</td><td class="py-2 pr-3">${fmtNumber(x.coefficient)}</td><td class="py-2 pr-3">${fmtNumber(x.notes)}</td><td class="py-2 pr-3 font-semibold">${avg(x.average)}</td><td class="py-2">${escapeHtml(x.mention || '—')}</td></tr>`).join('') : '<tr><td colspan="5" class="py-6 text-center text-slate-400">Aucune note sur cette période.</td></tr>'}</tbody></table></div></section>
       <div class="grid sm:grid-cols-3 gap-4"><div class="bg-white rounded-2xl border border-slate-200 p-5"><p class="text-xs text-slate-500">Moyenne générale</p><p class="text-2xl font-extrabold">${avg(d.overall_average)}</p></div>
       <div class="bg-white rounded-2xl border border-slate-200 p-5"><p class="text-xs text-slate-500">Rang dans la classe</p><p class="text-2xl font-extrabold">${d.rank ? `${d.rank} / ${d.class_size}` : '—'}</p></div>
       <div class="bg-white rounded-2xl border border-slate-200 p-5"><p class="text-xs text-slate-500">Appréciation</p><p class="text-2xl font-extrabold">${escapeHtml(d.mention || '—')}</p></div></div>
@@ -1196,10 +1493,10 @@ async function openBroadcasts(opts = {}) {
       ${isAdmin ? `<section class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-1">Alerte automatique d’absence</h3><p class="text-sm text-slate-500 mb-3">Quand un élève est noté absent, ses responsables sont prévenus (une seule fois par jour et par élève).</p>
         <form id="abs-form" class="flex flex-wrap items-center gap-4">${['sms', 'whatsapp', 'email'].map((k) => chk(k, 'abs', absence.includes(k))).join('')}<button class="${BTN_LIGHT}">Enregistrer</button><span id="abs-msg" class="text-sm text-emerald-700" role="status"></span></form></section>` : ''}
       <section class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-1">Rappels d’impayés</h3><p class="text-sm text-slate-500 mb-3">Paiements « en attente » : ${unpaid.parents} responsable${unpaid.parents > 1 ? 's' : ''} concerné${unpaid.parents > 1 ? 's' : ''}, ${money(unpaid.total)} au total. Un seul message par responsable, avec le détail par enfant.</p>
-        ${unpaid.rows.length ? `<div class="overflow-x-auto mb-3"><table class="w-full text-sm text-left"><thead><tr class="text-xs text-slate-500 border-b"><th class="py-2 pr-3">Responsable</th><th class="py-2 pr-3">Enfants</th><th class="py-2 pr-3">Montant</th><th class="py-2 pr-3">Ancienneté</th><th class="py-2">Joignable</th></tr></thead><tbody>${unpaid.rows.map((u) => `<tr class="border-b"><td class="py-2 pr-3">${escapeHtml(u.parent)}</td><td class="py-2 pr-3">${escapeHtml(u.children.join(', '))}</td><td class="py-2 pr-3 font-semibold">${money(u.amount)}</td><td class="py-2 pr-3">${u.oldest_days} j</td><td class="py-2 text-xs text-slate-500">${[u.sms && 'SMS', u.whatsapp && 'WhatsApp', u.email && 'e-mail'].filter(Boolean).join(', ') || '<span class="text-red-600">Aucun canal</span>'}</td></tr>`).join('')}</tbody></table></div>` : '<p class="text-sm text-slate-400 mb-3">Aucun impayé en attente.</p>'}
+        ${unpaid.rows.length ? `<div class="overflow-x-auto mb-3"><table class="w-full text-sm text-left"><thead><tr class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 border-y border-slate-200"><th class="py-3 px-3 first:pl-4">Responsable</th><th class="py-3 px-3 first:pl-4">Enfants</th><th class="py-3 px-3 first:pl-4">Montant</th><th class="py-3 px-3 first:pl-4">Ancienneté</th><th class="py-2">Joignable</th></tr></thead><tbody>${unpaid.rows.map((u) => `<tr class="border-b"><td class="py-2 pr-3">${escapeHtml(u.parent)}</td><td class="py-2 pr-3">${escapeHtml(u.children.join(', '))}</td><td class="py-2 pr-3 font-semibold">${money(u.amount)}</td><td class="py-2 pr-3">${u.oldest_days} j</td><td class="py-2 text-xs text-slate-500">${[u.sms && 'SMS', u.whatsapp && 'WhatsApp', u.email && 'e-mail'].filter(Boolean).join(', ') || '<span class="text-red-600">Aucun canal</span>'}</td></tr>`).join('')}</tbody></table></div>` : '<p class="text-sm text-slate-400 mb-3">Aucun impayé en attente.</p>'}
         ${canSend && unpaid.rows.length ? `<form id="unp-form" class="flex flex-wrap items-center gap-4"><span class="text-xs font-semibold text-slate-600">Relancer maintenant par</span>${['sms', 'whatsapp', 'email'].map((k) => chk(k, 'unp', k === 'sms')).join('')}<button class="${BTN_PRIMARY}">Envoyer les rappels</button></form>` : ''}
         ${isAdmin ? `<form id="unpset-form" class="mt-4 pt-4 border-t border-slate-100 flex flex-wrap items-center gap-4"><span class="text-sm font-semibold">Rappels automatiques</span>${['sms', 'whatsapp', 'email'].map((k) => chk(k, 'unpset', unpaidSet.unpaid_channels.includes(k))).join('')}<label class="text-sm">après <input name="days" type="number" min="1" max="90" value="${unpaidSet.unpaid_after_days}" class="w-16 rounded-lg border border-slate-200 px-2 py-1 text-sm"> jours, puis 2 relances à 14 jours d’intervalle</label><button class="${BTN_LIGHT}">Enregistrer</button><span id="unpset-msg" class="text-sm text-emerald-700" role="status"></span></form>` : ''}</section>
-      <section class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-3">Historique des envois</h3><div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-xs text-slate-500 border-b"><th class="py-2 pr-3">Date</th><th class="py-2 pr-3">Destinataires</th><th class="py-2 pr-3">Objet</th><th class="py-2 pr-3">Canaux</th><th class="py-2 pr-3">Envoyés</th><th class="py-2">Échecs / ignorés</th></tr></thead>
+      <section class="bg-white rounded-2xl border border-slate-200 p-5"><h3 class="font-bold mb-3">Historique des envois</h3><div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 border-y border-slate-200"><th class="py-3 px-3 first:pl-4">Date</th><th class="py-3 px-3 first:pl-4">Destinataires</th><th class="py-3 px-3 first:pl-4">Objet</th><th class="py-3 px-3 first:pl-4">Canaux</th><th class="py-3 px-3 first:pl-4">Envoyés</th><th class="py-2">Échecs / ignorés</th></tr></thead>
         <tbody>${hist.length ? hist.map((b) => `<tr class="border-b"><td class="py-2 pr-3 whitespace-nowrap">${new Date(b.created_at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</td><td class="py-2 pr-3">${escapeHtml(b.audience_label || '—')}<span class="text-xs text-slate-400"> · ${b.recipients} resp.</span></td><td class="py-2 pr-3">${escapeHtml(b.subject)}</td><td class="py-2 pr-3">${b.channels.map((c) => CH_LABELS[c] || c).join(', ')}</td><td class="py-2 pr-3 text-emerald-700 font-semibold">${b.sent}</td><td class="py-2 ${b.failed ? 'text-red-600' : 'text-slate-500'}">${b.failed} / ${b.skipped}</td></tr>`).join('') : '<tr><td colspan="6" class="py-6 text-center text-slate-400">Aucun message envoyé.</td></tr>'}</tbody></table></div></section>`;
     const f = $('bc-form');
     if (f) {
@@ -1321,11 +1618,14 @@ document.addEventListener('click', (ev) => {
   if (!act) return;
   const a = act.dataset.action;
   if (a === 'add-student') openModule('students', { add: true });
+  else if (a === 'timetable') openTimetable();
+  else if (a === 'report-card') openModule('reports');
+  else if (a === 'add-payment') openModule('payments', { add: true });
+  else if (a === 'stocks') openModule('stocks');
+  else if (a === 'reports') openModule('reports');
   else if (a === 'assign-class') openModule('students');
   else if (a === 'enter-grades') openModule('grades', { add: true });
-  else if (a === 'add-payment') openModule('payments', { add: true });
   else if (a === 'message') openModule('messages', { add: true });
-  else openModule('reports');
 });
 
 // Mobile / tablette (< 1024 px) : menu en panneau par-dessus le contenu, fermé au départ, avec fond cliquable.
@@ -1434,7 +1734,7 @@ async function platformTenants() {
   moduleView.innerHTML = `${platformTitle('Plateforme', 'Établissements', `<button id="pl-csv" class="${BTN_LIGHT}"><i class="fa-solid fa-file-csv mr-2"></i>Exporter (CSV)</button><button id="pl-new" class="${BTN_PRIMARY}"><i class="fa-solid fa-plus mr-2"></i>Nouvel établissement</button>`)}
     <section class="${CARD}"><div class="flex flex-wrap gap-2 mb-4"><input id="pl-q" type="search" placeholder="Nom, code ou ville…" value="${escapeHtml(tenantFilter.q)}" class="rounded-lg border border-slate-200 px-3 py-2 text-sm" aria-label="Rechercher un établissement">
       <select id="pl-status" class="rounded-lg border border-slate-200 px-3 py-2 text-sm" aria-label="Filtrer par statut"><option value="">Tous les statuts</option><option value="active">Actifs</option><option value="suspended">Suspendus</option><option value="preparation">En préparation</option></select></div>
-      <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-xs text-slate-500 border-b"><th class="py-2 pr-3">Établissement</th><th class="py-2 pr-3">Pack</th><th class="py-2 pr-3">Licence</th><th class="py-2 pr-3">Élèves</th><th class="py-2 pr-3">Utilisateurs</th><th class="py-2"></th></tr></thead><tbody id="pl-rows"><tr><td class="py-3 text-slate-400" colspan="6">Chargement…</td></tr></tbody></table></div></section>`;
+      <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 border-y border-slate-200"><th class="py-3 px-3 first:pl-4">Établissement</th><th class="py-3 px-3 first:pl-4">Pack</th><th class="py-3 px-3 first:pl-4">Licence</th><th class="py-3 px-3 first:pl-4">Élèves</th><th class="py-3 px-3 first:pl-4">Utilisateurs</th><th class="py-2"></th></tr></thead><tbody id="pl-rows"><tr><td class="py-3 text-slate-400" colspan="6">Chargement…</td></tr></tbody></table></div></section>`;
   $('pl-status').value = tenantFilter.status;
   $('pl-new').addEventListener('click', () => newTenantForm());
   $('pl-csv').addEventListener('click', () => downloadFile('/api/platform/tenants.csv', 'etablissements.csv'));
@@ -1472,7 +1772,7 @@ async function platformTenantDetail(id) {
         <div class="flex flex-wrap gap-2 mt-3"><span class="text-xs text-slate-500 self-center">Renouveler de :</span>${[3, 6, 12].map((m) => `<button data-renew="${m}" class="${BTN_LIGHT}">${m} mois</button>`).join('')}<button id="pl-plan" class="${BTN_LIGHT}">Appliquer un pack…</button></div></section>
     </div>
     <section class="${CARD}"><h3 class="font-bold mb-3">Administrateurs de l’établissement</h3>
-      <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-xs text-slate-500 border-b"><th class="py-2 pr-3">Nom</th><th class="py-2 pr-3">E-mail</th><th class="py-2 pr-3">Dernière connexion</th><th class="py-2 pr-3">Statut</th><th class="py-2"></th></tr></thead><tbody>
+      <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 border-y border-slate-200"><th class="py-3 px-3 first:pl-4">Nom</th><th class="py-3 px-3 first:pl-4">E-mail</th><th class="py-3 px-3 first:pl-4">Dernière connexion</th><th class="py-3 px-3 first:pl-4">Statut</th><th class="py-2"></th></tr></thead><tbody>
       ${t.admins.length ? t.admins.map((a) => `<tr class="border-b border-slate-100"><td class="py-2 pr-3">${escapeHtml(a.full_name || '—')}</td><td class="py-2 pr-3">${escapeHtml(a.email)}</td><td class="py-2 pr-3 text-slate-500">${a.last_login_at ? new Date(a.last_login_at).toLocaleString('fr-FR') : 'jamais'}</td><td class="py-2 pr-3">${a.is_active ? 'Actif' : '<span class="text-red-600">Désactivé</span>'}</td>
         <td class="py-2 text-right whitespace-nowrap"><button data-pwd="${escapeHtml(a.id)}" data-who="${escapeHtml(a.email)}" class="${BTN_LIGHT}">Mot de passe</button> <button data-toggle="${escapeHtml(a.id)}" data-active="${a.is_active ? '1' : '0'}" class="${BTN_LIGHT}">${a.is_active ? 'Désactiver' : 'Réactiver'}</button></td></tr>`).join('') : '<tr><td colspan="5" class="py-3 text-slate-400">Aucun administrateur.</td></tr>'}</tbody></table></div>
       <p class="mt-3 text-xs text-slate-400">Le superadmin ne crée pas les employés : l’administrateur de l’établissement gère ses propres utilisateurs.</p></section>
@@ -1524,7 +1824,7 @@ async function platformTenantDetail(id) {
 async function platformPlans() {
   const list = rows(await get('/api/platform/plans'));
   moduleView.innerHTML = `${platformTitle('Plateforme', 'Packs et quotas', `<button id="plan-add" class="${BTN_PRIMARY}"><i class="fa-solid fa-plus mr-2"></i>Nouveau pack</button>`)}
-    <section class="${CARD}"><div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-xs text-slate-500 border-b"><th class="py-2 pr-3">Pack</th><th class="py-2 pr-3">Élèves max.</th><th class="py-2 pr-3">Utilisateurs max.</th><th class="py-2 pr-3">Prix / mois</th><th class="py-2 pr-3">Établissements</th><th class="py-2 pr-3">Statut</th><th class="py-2"></th></tr></thead><tbody>
+    <section class="${CARD}"><div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 border-y border-slate-200"><th class="py-3 px-3 first:pl-4">Pack</th><th class="py-3 px-3 first:pl-4">Élèves max.</th><th class="py-3 px-3 first:pl-4">Utilisateurs max.</th><th class="py-3 px-3 first:pl-4">Prix / mois</th><th class="py-3 px-3 first:pl-4">Établissements</th><th class="py-3 px-3 first:pl-4">Statut</th><th class="py-2"></th></tr></thead><tbody>
     ${list.map((p) => `<tr class="border-b border-slate-100"><td class="py-3 pr-3"><div class="font-semibold">${escapeHtml(p.name)}</div><div class="text-xs text-slate-500">${escapeHtml(p.code)}${p.description ? ` · ${escapeHtml(p.description)}` : ''}</div></td><td class="py-3 pr-3">${p.max_students === null ? '∞' : fmtNumber(p.max_students)}</td><td class="py-3 pr-3">${p.max_users === null ? '∞' : fmtNumber(p.max_users)}</td><td class="py-3 pr-3">${p.price_monthly === null ? '—' : money(p.price_monthly)}</td><td class="py-3 pr-3">${fmtNumber(p.tenants_count)}</td><td class="py-3 pr-3">${p.is_active ? 'Actif' : '<span class="text-slate-400">Désactivé</span>'}</td>
       <td class="py-3 text-right whitespace-nowrap"><button data-edit="${escapeHtml(p.id)}" class="${BTN_LIGHT}">Modifier</button> <button data-flip="${escapeHtml(p.id)}" data-active="${p.is_active ? '1' : '0'}" class="${BTN_LIGHT}">${p.is_active ? 'Désactiver' : 'Activer'}</button></td></tr>`).join('')}</tbody></table></div>
     <p class="mt-3 text-xs text-slate-400">Modifier un pack ne change pas les quotas des établissements déjà abonnés : utilisez « Appliquer un pack » sur la fiche de l’établissement. Un pack se désactive, il ne se supprime pas.</p></section>`;
@@ -1541,7 +1841,7 @@ async function platformPlans() {
 
 async function platformAudit() {
   const list = rows(await get('/api/platform/audit?limit=100'));
-  moduleView.innerHTML = `${platformTitle('Plateforme', 'Journal d’activité')}<section class="${CARD}"><div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-xs text-slate-500 border-b"><th class="py-2 pr-3">Date</th><th class="py-2 pr-3">Action</th><th class="py-2 pr-3">Établissement</th><th class="py-2">Auteur</th></tr></thead><tbody>
+  moduleView.innerHTML = `${platformTitle('Plateforme', 'Journal d’activité')}<section class="${CARD}"><div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 border-y border-slate-200"><th class="py-3 px-3 first:pl-4">Date</th><th class="py-3 px-3 first:pl-4">Action</th><th class="py-3 px-3 first:pl-4">Établissement</th><th class="py-2">Auteur</th></tr></thead><tbody>
     ${list.length ? list.map((a) => `<tr class="border-b border-slate-100"><td class="py-2 pr-3 text-slate-500 whitespace-nowrap">${new Date(a.created_at).toLocaleString('fr-FR')}</td><td class="py-2 pr-3">${escapeHtml(PLATFORM_ACTIONS[a.action] || 'Action enregistrée')}</td><td class="py-2 pr-3">${escapeHtml(a.tenant_name || (a.details && a.details.name) || '—')}</td><td class="py-2">${escapeHtml(a.user_name || '—')}</td></tr>`).join('') : '<tr><td colspan="4" class="py-3 text-slate-400">Aucune action.</td></tr>'}</tbody></table></div></section>`;
 }
 
@@ -1564,6 +1864,7 @@ function applyRoleNav() {
     a.classList.toggle('hidden', isSuper ? !platform : isParent ? k !== 'portal' : (platform || k === 'portal'));
   });
   if (!isSuper && !isParent) document.querySelectorAll('nav [data-module]').forEach((a) => { const k = a.dataset.module; if (['dashboard', 'settings'].includes(k) || k.startsWith('platform-')) return; if (permOf(k === 'broadcasts' ? 'notifications' : k) === 'none') a.classList.add('hidden'); });
+  syncNavGroups();
   $('nav-platform-title').classList.toggle('hidden', !isSuper);
   $('search-box').classList.toggle('hidden', !!isSuper || !!isParent);
 }
@@ -1727,7 +2028,7 @@ async function setupSubscription() {
       <div>${line('Pack', escapeHtml(d.plan_name || 'Aucun'))}${line('Licence', licenseBadge(d.license_state))}${line('Validité', d.license_end ? `jusqu’au ${displayDate(d.license_end)}` : 'sans date de fin')}</div>
       <div>${line('Élèves', quotaText(d.students_count, d.max_students))}${line('Utilisateurs', quotaText(d.users_count, d.max_users))}</div></div>
     <h4 class="font-semibold text-slate-700 mt-4 mb-2">Factures</h4>
-    ${d.invoices.length ? `<div class="overflow-x-auto"><table class="w-full text-left"><thead><tr class="text-xs text-slate-500 border-b"><th class="py-2 pr-3">Numéro</th><th class="py-2 pr-3">Période</th><th class="py-2 pr-3">Montant</th><th class="py-2 pr-3">Échéance</th><th class="py-2 pr-3">Statut</th><th class="py-2"></th></tr></thead><tbody>
+    ${d.invoices.length ? `<div class="overflow-x-auto"><table class="w-full text-left"><thead><tr class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 border-y border-slate-200"><th class="py-3 px-3 first:pl-4">Numéro</th><th class="py-3 px-3 first:pl-4">Période</th><th class="py-3 px-3 first:pl-4">Montant</th><th class="py-3 px-3 first:pl-4">Échéance</th><th class="py-3 px-3 first:pl-4">Statut</th><th class="py-2"></th></tr></thead><tbody>
       ${d.invoices.map((i) => { const credit = i.document_type === 'credit_note'; return `<tr class="border-b border-slate-100"><td class="py-2 pr-3 font-medium text-slate-800">${escapeHtml(i.number)}${credit ? ' <span class="text-xs text-slate-400">(avoir)</span>' : ''}</td><td class="py-2 pr-3">${i.period_start ? `${displayDate(i.period_start)} → ${displayDate(i.period_end)}` : '—'}</td><td class="py-2 pr-3 whitespace-nowrap">${credit ? '− ' : ''}${money(i.amount)}${i.tax_amount ? `<div class="text-xs text-slate-400">dont TVA ${money(i.tax_amount)}</div>` : ''}</td><td class="py-2 pr-3">${i.due_date ? displayDate(i.due_date) : '—'}</td><td class="py-2 pr-3">${invoiceBadge(i)}</td><td class="py-2 text-right">${!credit && i.status === 'pending' ? '<button type="button" disabled title="Indisponible pour le moment" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-400 cursor-not-allowed"><i class="fa-solid fa-ban mr-1"></i>Payer en ligne</button>' : ''}</td></tr>`; }).join('')}</tbody></table></div>` : '<p class="text-slate-400">Aucune facture.</p>'}
     <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800" id="online-pay-note"><i class="fa-solid fa-circle-info mr-1"></i><strong>Paiement en ligne (Orange Money, Moov Money) : indisponible pour le moment.</strong> Réglez auprès de l’éditeur (espèces, virement, Orange Money ou Moov Money en direct, chèque).</div>
     <p class="mt-3 text-xs text-slate-400">Pour renouveler ou changer de pack, contactez l’éditeur du logiciel.</p>`;
@@ -1799,7 +2100,7 @@ async function platformBilling() {
       <select id="bl-type" class="rounded-lg border border-slate-200 px-3 py-2 text-sm" aria-label="Type"><option value="">Factures et avoirs</option><option value="invoice">Factures</option><option value="credit_note">Avoirs</option></select>
       <label class="text-xs text-slate-500">Du <input id="bl-from" type="date" class="rounded-lg border border-slate-200 px-2 py-1.5 text-sm" value="${billingFilter.from}"></label>
       <label class="text-xs text-slate-500">au <input id="bl-to" type="date" class="rounded-lg border border-slate-200 px-2 py-1.5 text-sm" value="${billingFilter.to}"></label></div>
-      <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-xs text-slate-500 border-b"><th class="py-2 pr-3">Numéro</th><th class="py-2 pr-3">Établissement</th><th class="py-2 pr-3">Période</th><th class="py-2 pr-3">Montant</th><th class="py-2 pr-3">Échéance</th><th class="py-2 pr-3">Statut</th><th class="py-2"></th></tr></thead><tbody id="bl-rows"></tbody></table></div></section>`;
+      <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 border-y border-slate-200"><th class="py-3 px-3 first:pl-4">Numéro</th><th class="py-3 px-3 first:pl-4">Établissement</th><th class="py-3 px-3 first:pl-4">Période</th><th class="py-3 px-3 first:pl-4">Montant</th><th class="py-3 px-3 first:pl-4">Échéance</th><th class="py-3 px-3 first:pl-4">Statut</th><th class="py-2"></th></tr></thead><tbody id="bl-rows"></tbody></table></div></section>`;
   $('bl-status').value = billingFilter.status; $('bl-type').value = billingFilter.type;
   const qs = () => { const q = new URLSearchParams(); for (const [k, v] of Object.entries(billingFilter)) if (v) q.set(k, v); return q; };
   async function load() {
@@ -1844,7 +2145,7 @@ async function invoiceView(id, back) {
       <section class="grid sm:grid-cols-2 gap-6 py-5 text-sm">
         <div><div class="text-xs uppercase tracking-wide text-slate-400 mb-1">Facturé à</div><div class="font-semibold text-slate-900">${escapeHtml(i.tenant_name)}</div><div class="text-slate-600">${[t.city, t.contact_name, t.contact_email, t.contact_phone].filter(Boolean).map(escapeHtml).join('<br>')}</div></div>
         <div class="sm:text-right text-slate-600"><div>Date d’émission : <strong>${displayDate(i.created_at)}</strong></div><div>Échéance : <strong>${displayDate(i.due_date)}</strong></div>${t.contract_ref ? `<div>Contrat : <strong>${escapeHtml(t.contract_ref)}</strong></div>` : ''}</div></section>
-      <table class="w-full text-sm"><thead><tr class="text-xs text-slate-500 border-b"><th class="py-2 text-left">Description</th><th class="py-2 text-left">Période</th><th class="py-2 text-right">Montant</th></tr></thead>
+      <table class="w-full text-sm"><thead><tr class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 border-y border-slate-200"><th class="py-2 text-left">Description</th><th class="py-2 text-left">Période</th><th class="py-2 text-right">Montant</th></tr></thead>
         <tbody><tr class="border-b border-slate-100"><td class="py-3">${escapeHtml(i.description)}</td><td class="py-3 whitespace-nowrap">${displayDate(i.period_start)} → ${displayDate(i.period_end)}</td><td class="py-3 text-right whitespace-nowrap">${money(i.amount)}</td></tr></tbody>
         <tfoot>${i.document_type === 'credit_note' ? '' : `${Number(i.discount_amount) || Number(i.tax_amount) ? `<tr><td colspan="2" class="pt-3 text-right text-slate-500">Sous-total HT</td><td class="pt-3 text-right whitespace-nowrap">${money(i.subtotal)}</td></tr>` : ''}${Number(i.discount_amount) ? `<tr><td colspan="2" class="text-right text-slate-500">Remise</td><td class="text-right whitespace-nowrap">− ${money(i.discount_amount)}</td></tr>` : ''}${Number(i.tax_amount) ? `<tr><td colspan="2" class="text-right text-slate-500">TVA ${fmtNumber(i.tax_rate)} %</td><td class="text-right whitespace-nowrap">${money(i.tax_amount)}</td></tr>` : ''}`}
           <tr><td colspan="2" class="pt-4 text-right font-semibold">${i.document_type === 'credit_note' ? 'Total de l’avoir' : 'Total TTC'}</td><td class="pt-4 text-right text-lg font-bold text-slate-900 whitespace-nowrap">${i.document_type === 'credit_note' ? '− ' : ''}${money(i.amount)}</td></tr>
@@ -1869,7 +2170,7 @@ async function platformMail() {
   moduleView.innerHTML = `${platformTitle('Plateforme', 'E-mails et rappels')}<div id="ml-top"></div>
     <section class="${CARD}"><div class="flex flex-wrap items-center justify-between gap-2 mb-3"><h3 class="font-bold">Journal des envois</h3>
       <select id="ml-status" class="rounded-lg border border-slate-200 px-3 py-2 text-sm" aria-label="Statut"><option value="">Tous</option><option value="sent">Envoyés</option><option value="failed">En échec</option><option value="skipped">Non envoyés</option></select></div>
-      <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-xs text-slate-500 border-b"><th class="py-2 pr-3">Date</th><th class="py-2 pr-3">Destinataire</th><th class="py-2 pr-3">Objet</th><th class="py-2 pr-3">Type</th><th class="py-2 pr-3">Statut</th><th class="py-2"></th></tr></thead><tbody id="ml-rows"></tbody></table></div></section>`;
+      <div class="overflow-x-auto"><table class="w-full text-sm text-left"><thead><tr class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 border-y border-slate-200"><th class="py-3 px-3 first:pl-4">Date</th><th class="py-3 px-3 first:pl-4">Destinataire</th><th class="py-3 px-3 first:pl-4">Objet</th><th class="py-3 px-3 first:pl-4">Type</th><th class="py-3 px-3 first:pl-4">Statut</th><th class="py-2"></th></tr></thead><tbody id="ml-rows"></tbody></table></div></section>`;
   const guard = (fn) => async () => { try { await fn(); } catch (e) { toast(e.message, 'err'); } };
   async function loadTop() {
     const c = (await get('/api/platform/mail')).data;

@@ -7,3 +7,27 @@ html, body { min-height: 100%; }
   body, #main-content { overflow: visible !important; height: auto !important; background: #fff !important; }
   #main-content { padding: 0 !important; }
 }
+
+/* ===== Système de design SCHOOL MANAGER PRO (maquette officielle) ===== */
+body { font-family: 'Poppins', ui-sans-serif, system-ui, sans-serif; background: var(--color-surface); }
+.nav-link { display:flex; align-items:center; justify-content:space-between; padding:.6rem .875rem; border-radius:.75rem; color:#c7d3ea; font-weight:500; transition:background-color .15s,color .15s; }
+.nav-link:hover { background: rgba(46,124,246,.14); color:#fff; }
+.nav-link.is-active, .nav-link[aria-current="page"] { color:#fff; background: linear-gradient(90deg,#1d5fd8,#2e7cf6); box-shadow: 0 8px 18px -8px rgba(46,124,246,.7); }
+.nav-link i { width:1.25rem; text-align:center; font-size:.875rem; }
+.nav-link span { font-size:.875rem; }
+.panel { background:#fff; border-radius:1rem; box-shadow:0 1px 2px rgba(11,31,74,.06),0 6px 18px -10px rgba(11,31,74,.18); }
+.stat-card { border-radius:1rem; color:#fff; padding:1.125rem 1.25rem; box-shadow:0 10px 24px -14px rgba(11,31,74,.55); }
+.stat-card.blue { background: linear-gradient(135deg,#1d5fd8,#2e7cf6); }
+.stat-card.green { background: linear-gradient(135deg,#15803d,#22c55e); }
+.stat-card.orange { background: linear-gradient(135deg,#ea8a0c,#fbbf24); }
+.stat-card.violet { background: linear-gradient(135deg,#6d28d9,#a855f7); }
+.trend-empty { font-size:.75rem; opacity:.85; font-style:italic; }
+.nav-link.hidden { display:none; }
+
+.brand-block { padding: .75rem .75rem 0; }
+.brand-tile { background:#fff; border-radius: 1rem; padding:1rem 1.125rem; display:flex; align-items:center; min-height:5.5rem; }
+.brand-logo { width:100%; height:auto; max-height:5.25rem; object-fit:contain; }
+.user-chip { display:flex; align-items:center; gap:.625rem; padding-left:.875rem; border-left:1px solid #e2e8f0; }
+.sidebar-promo { margin: 1.25rem .75rem .25rem; border-radius:1rem; padding:1.125rem 1rem; color:#fff; background: linear-gradient(135deg,#1d5fd8,#2e7cf6); text-align:center; display:flex; flex-direction:column; align-items:center; gap:.5rem; box-shadow:0 12px 24px -14px rgba(46,124,246,.8); }
+.sidebar-promo p { font-size:.8125rem; font-weight:600; line-height:1.35; }
+.brand-tile.hidden { display:none; }

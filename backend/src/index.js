@@ -67,6 +67,7 @@ function buildApi() {
   scoped.use('/attendances', gateRead('attendances'), require('./modules/attendances'));
   scoped.use('/grades', gateRead('grades'), require('./modules/grades'));
   scoped.use('/payments', gateRead('payments'), require('./modules/payments'));
+  scoped.use('/invoices', gateRead('payments'), require('./modules/invoices'));
   scoped.use('/messages', gateRead('messages'), require('./modules/messages'));
   scoped.use('/documents', gateRead('documents'), require('./modules/documents'));
   scoped.use('/stocks', gateRead('stocks'), require('./modules/stocks'));
@@ -80,6 +81,7 @@ function buildApi() {
   scoped.use('/timetable', gateRead('timetable'), require('./modules/timetable'));
   scoped.use('/reports', gateRead('reports'), require('./modules/reports'));
   const accounts = require('./modules/settings');
+  scoped.use('/settings/banner/images', require('./modules/bannerImages'));
   scoped.use('/settings', accounts.settings);
   scoped.use('/users', accounts.users);
   api.use(scoped);

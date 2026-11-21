@@ -166,3 +166,149 @@ Règle retenue le 19/11/2026 :
 - Réponse à la limite : 403 avec `code: "quota_exceeded"`.
 - Tests : intégration 110/110, dont une réactivation refusée à la limite (compte resté inactif) et six créations simultanées avec deux places libres (exactement deux créées, quatre refusées). Unitaires 32/32.
 - Non vérifié : que ce test échoue sur l’ancien code (non relancé sur la version antérieure).
+
+## 8. Refonte UI — phase 2 (tableau de bord et affiche multi-images)
+
+Réalisé et vérifié :
+- Tableau de bord conforme à la maquette : ligne de bienvenue et date, quatre cartes (élèves, enseignants, classes, recettes) avec tendance calculée par le serveur ou « Pas de donnée », notes et présence moyenne, actions rapides, courbe des effectifs (6 mois), répartition par niveau, activités récentes, encaissements et paiements récents.
+- Affiche d’accueil en diaporama de jusqu’à 6 images (migration 034, `/api/settings/banner/images`), image principale en premier, cadrage au clic, ordre, suppression ; ancienne affiche unique conservée en repli.
+- Tests : unitaires 32/32 ; intégration 111/111 (PostgreSQL de test, migrations rejouées) ; recettes navigateur 18/18 et 9/9 ; captures contrôlées (tableau de bord, gestionnaire d’affiche).
+
+Non réalisé dans cette phase : menu à sous-sections de la maquette, responsive mobile détaillé, pages modules restantes.
+
+## 9. Refonte UI — phase 3 (menu à sous-sections et mobile)
+
+Réalisé et vérifié :
+- Menu latéral selon la maquette : rubriques repliables (Établissement, Utilisateurs, Gestion académique, Finances, Stock & Matériel, Communications, Rapports, Paramètres), groupe actif ouvert automatiquement, groupes sans module autorisé masqués.
+- Rattachement des modules aux rubriques (décision de regroupement) : Établissement = Classes, Emploi du temps, Documents ; Utilisateurs = Élèves, Enseignants, Personnel (RH) ; Gestion académique = Notes, Présences ; Finances = Paiements ; Stock & Matériel = Stocks, Bibliothèque, Cantine, Transport ; Communications = Messages, Communication ; Rapports ; Paramètres = Configuration.
+- « Aide & Support » affiché comme « À venir », non cliquable (aucun contenu réel à ce stade).
+- Vérification : tous les identifiants de module du menu précédent sont conservés (comparaison avec HEAD).
+- Mobile (390 px) : aucun débordement horizontal, menu en panneau fonctionnel, contraste de l'affiche renforcé.
+- Tests : unitaires 32/32 ; intégration 111/111 ; recettes navigateur 18/18 et 9/9 après réinitialisation de la base de test. Les recettes ouvrent désormais la rubrique avant de cliquer sur un module (`navTo`).
+
+Non vérifié : tablette (768–1023 px) et navigateur autre que Chromium.
+
+## 10. Refonte UI — phase 4 (pages de liste des modules)
+
+Réalisé et vérifié :
+- Toutes les pages de liste (élèves, enseignants, classes, notes, présences, paiements, stocks, etc.) partagent un même gabarit : carte « panel », en-tête de tableau en majuscules, lignes survolées, bouton principal aux couleurs de la maquette.
+- Captures contrôlées : liste des élèves sur ordinateur (1440 px) et tablette (900 px), sans débordement horizontal.
+- Tests : unitaires 32/32 ; intégration 111/111 ; recettes navigateur 18/18 et 9/9 (base réinitialisée).
+
+Non vérifié : écrans de formulaire (modales) et pages notes / paiements capturées une à une ; tablette avec d'autres modules.
+
+## 11. Refonte UI — phase 5 (contrôle des formulaires, notes et paiements)
+
+Vérifié visuellement (captures sur ordinateur 1440 px) :
+- Modale « Ajouter un élève » : champs, libellés obligatoires, boutons Annuler / Enregistrer alignés sur la maquette.
+- Modale « Ajouter un paiement » : fonctionnelle, mais deux champs élève à la suite (recherche puis liste) : à simplifier.
+- Page Notes : statuts Saisie / Validée / Annulée et actions par ligne cohérents.
+
+Vérifié fonctionnellement (non modifié en phase 5) : parcours de notes et de paiements couverts par les recettes navigateur 18/18 et les tests d'intégration 111/111 (rejoués sur base réinitialisée).
+
+Non vérifié : messages d'erreur de validation affichés dans les modales ; modale de modification ; tablette sur les modales.
+
+## 12. Refonte UI — phase 5 (suite) : sélection d'élève, erreurs de modale, tablette
+
+Réalisé et vérifié :
+- Sélection d'élève (paiements, notes, présences) : un seul champ de recherche, liste cliquable des résultats (8 maximum), élève sélectionné affiché et confirmé ; l'identifiant n'est transmis qu'après choix. Vérifié dans le navigateur : sélection puis enregistrement, la modale se ferme.
+- Erreur de champ obligatoire : la modale nomme désormais les champs manquants (« Renseignez : Élève, Montant (F CFA) ») avant tout envoi. Avant : « Champ obligatoire ; Champ obligatoire ».
+- Erreur serveur : montant invalide affiché dans la modale (« Doit être un nombre »). Limite connue : le message serveur ne nomme pas le champ.
+- Tablette 768 px et 1024 px : aucun débordement de page, modales et liste de résultats lisibles. Cellules des listes sur une ligne, défilement horizontal dans la carte si nécessaire.
+- Tests : unitaires 32/32 ; intégration 111/111 ; recettes navigateur 18/18 et 9/9 (base réinitialisée).
+
+Non vérifié : modale de modification ; tablettes réelles (seul le moteur Chromium en émulation a été utilisé).
+
+## 13. Refonte UI — messages de champ et modale de modification
+
+Réalisé et vérifié (navigateur, Chromium en émulation) :
+- Erreurs serveur de champ : chaque message est rattaché au libellé du champ fautif (« Montant (F CFA) : Doit être un nombre »). Aucune modification de l'API : le nom du champ est déjà fourni par le serveur et traduit côté interface.
+- Champs obligatoires : « Renseignez : Élève, Montant (F CFA). » avant tout envoi.
+- Modale « Modifier l'élève » : pré-remplie, champ obligatoire vide refusé avec message, enregistrement valide ferme la modale.
+- Tests : unitaires 32/32 ; intégration 111/111 ; recettes navigateur 18/18 et 9/9 (base réinitialisée).
+
+Non vérifié : messages serveur dans toutes les modales (seuls élève et paiement ont été contrôlés) ; modification sur tablette.
+
+## 14. Messages de champ sur les autres modales (contrôle sans modification de code)
+
+Vérifié dans le navigateur (Chromium en émulation) :
+- Notes : « Renseignez : Élève, Matière, Note (sur 20). » ; note 99 refusée : « Note (sur 20) : Doit être inférieur ou égal à 20 ».
+- Classes : « Renseignez : Nom de la classe. » ; effectif -4 refusé : « Effectif maximum : Doit être supérieur à 0 ».
+- Présences : « Renseignez : Élève, Date. ».
+
+Non modifié : aucune anomalie trouvée sur ces modales.
+Non vérifié : modales Enseignants, Bibliothèque, Stocks ; tablette.
+
+## 15. Messages de champ : enseignants, bibliothèque, stocks (contrôle sans modification de code)
+
+Vérifié dans le navigateur (Chromium en émulation) :
+- Enseignants : « Renseignez : Prénom, Nom. » ; e-mail invalide : « E-mail : Adresse e-mail invalide ».
+- Bibliothèque : « Renseignez : Titre. ».
+- Stocks : « Renseignez : Article. » ; quantité non numérique : « Quantité : Doit être un nombre ».
+
+Non modifié : aucune anomalie trouvée. Non vérifié : ces modales sur tablette.
+
+## 16. Modales sur tablette (768 px et 1024 px, émulation Chromium)
+
+Vérifié :
+- Modale « Ajouter un élève » : entièrement visible à l'écran, sans débordement, message d'erreur lisible (« Renseignez : Matricule, Prénom, Nom. »).
+- Modale « Ajouter un paiement » à 768 px : liste de résultats de la recherche d'élève lisible (vérifié en phase 5 suite).
+- Aucun débordement horizontal de page.
+
+Non vérifié : appareils physiques (seule l'émulation Chromium a été utilisée) ; modales de notes, classes et stocks sur tablette.
+
+## 17. Refonte UI — phase 6 : fiche élève et en-têtes de tableaux
+
+Réalisé et vérifié :
+- Fiche « Dossier individuel de l'élève » : vérifiée dans le navigateur (1440 px), aucune erreur de page.
+- En-têtes de tableau uniformisés dans toute l'application (14 styles d'en-tête et 56 cellules d'en-tête alignés sur le gabarit des listes). Modification de classes CSS uniquement, sans changement de logique.
+- Tests : unitaires 32/32 ; intégration 111/111 ; recettes navigateur 18/18 et 9/9 (base réinitialisée).
+
+Non vérifié : fiche élève sur tablette et les autres tableaux un par un (rendu contrôlé sur la seule fiche élève et la liste élèves).
+
+## 18. Vérification tablette : liste élèves et fiche élève (768 px et 1024 px, émulation Chromium)
+
+- Liste élèves et fiche élève : aucun débordement horizontal de page à 768 ni à 1024 px.
+- Fiche élève à 768 px : informations, responsables et sections d'historique lisibles.
+- Limite : la fiche a été contrôlée sans historique rempli ; les tableaux avec données défilent dans leur carte (`overflow-x-auto`), comportement non vérifié visuellement sur données réelles.
+- Aucun changement de code dans cette étape.
+
+## 19. Finances : factures familiales et affectation des paiements
+
+Périmètre retenu : factures par élève, grilles de frais, paiements affectés aux factures, soldes et impayés.
+Décisions : annulation d'une facture = libération de ses affectations (la facture reste consultable, statut « Annulée ») ; numérotation FAC-000001 par établissement.
+
+Réalisé et vérifié :
+- Migration 035 (additive) : fee_structures, student_invoices, invoice_items, payment_allocations ; index unique (id, tenant_id) sur students.
+- API /api/invoices (droit « Paiements » : lecture, écriture pour le comptable et l'administrateur) : grilles de frais, création avec total calculé par le serveur, détail avec solde, affectation dans une transaction à verrous de ligne, retrait d'affectation, annulation journalisée.
+- Interface : entrée « Factures » dans Finances, liste filtrable et paginée, création avec lignes multiples et choix dans la grille, détail avec affectation, retrait et annulation.
+- Tests d'intégration ajoutés (6) : calcul serveur et numérotation ; lignes invalides, élève d'un autre établissement, rôle sans droit ; affectation bornée au solde facture et au solde paiement ; mauvais élève, paiement non encaissé, paiement d'un autre établissement ; deux affectations simultanées sur le même reste (une seule réussit) ; annulation libérant les affectations.
+- Recette navigateur `recette-factures.js` (8/8) : création via l'interface, total à l'écran, affectation de 5 000 F, solde recalculé, statut « Partielle », aucune erreur JavaScript.
+- Tests : unitaires 32/32 ; intégration 117/117 ; recettes phase1 18/18, messagerie 9/9, factures 8/8.
+
+Non vérifié : factures sur tablette ; données réelles de volume ; droits des rôles autres que administrateur et comptable sur les factures (couverts par les tests d'accès, pas par une recette navigateur).
+Ajout (même phase) : PDF de facture (GET /api/invoices/:id/invoice.pdf, droit « Paiements ») et envoi aux responsables (POST /api/invoices/:id/send, écriture « Paiements ») : destinataires = responsables liés à l’élève ayant un e-mail ; envoi via la file mail_outbox (kind « family_invoice »), journalisé dans l’audit. Refus 422 sans adresse, 409 si annulée.
+Tests : intégration 119/119 (PDF, isolation, envoi, refus) ; recette factures 10/10 (téléchargement du PDF, message d’envoi) ; phase1 18/18 ; messagerie 9/9 ; unitaires 32/32.
+Limites : envoi réel non vérifié (SMTP non configuré en test : statut « skipped ») ; une relance depuis la file n’a pas de pièce jointe régénérée pour ces factures ; lien facture ↔ reçu non traité ; PDF d’une facture de plus de ~18 lignes non vérifié.
+
+### Complément : lien facture ↔ reçu, envoi SMTP réel, pagination
+- Reçu PDF : section « Affecté aux factures » (numéros des factures, montants, reste non affecté).
+- Facture PDF : tableau sur plusieurs pages, entête répétée ; une facture de 30 lignes (2 pages) vérifiée. Corrections : unitaire et montant ne se chevauchent plus ; séparateur de milliers rendu correctement ; solde affiché à 0 pour une facture annulée.
+- Envoi réel : serveur SMTP de test, message reçu avec pièce jointe PDF, destinataire = responsable de l’élève.
+- Tests : intégration 120/120 ; recettes phase1 18/18, messagerie 9/9, factures 10/10 ; unitaires 32/32.
+- Limites restantes : relance depuis la file sans pièce jointe régénérée ; SMTP réel d’établissement non testé ; PDF de plus de 2 pages vérifié seulement jusqu’à 2.
+
+### Complément : relance d’un envoi de facture familiale
+- La relance (superadmin, file d’envoi) régénère désormais la pièce jointe à partir de la facture actuelle. Une facture annulée entre-temps n’est pas envoyée (réponse 502, aucun envoi).
+- Test : envoi consigné sans SMTP, relance après configuration (message reçu avec la facture PDF), relance refusée pour une facture annulée.
+- Tests : intégration 121/121 ; recettes phase1 18/18, messagerie 9/9, factures 10/10 ; unitaires 32/32.
+- Limite : la relance est réservée au superadmin (file de la plateforme) ; l’établissement relance en renvoyant l’envoi depuis le détail de la facture.
+
+### Accueil connecté (tableau de bord) : données réelles
+- Titre de l’affiche par défaut : « Bienvenue sur <nom de l’établissement> » (nom réel du tenant, fourni par /api/stats/dashboard) ; le texte personnalisé de l’établissement reste prioritaire.
+- Cartes de statistiques : pastille de tendance dans la ligne du libellé (plus de chevauchement avec la valeur « 210 500 F ») ; libellés sur une ligne.
+- Activités récentes : libellés français pour toutes les actions journalisées (factures, frais, périodes, notes, diffusions, parents…), au lieu de « Action enregistrée ».
+- Vérifié : captures bureau 1440 px et téléphone 390 px, aucune erreur JavaScript.
+- Tests : intégration 122/122 (dont nom d’établissement par tenant) ; recettes phase1 18/18, messagerie 9/9, factures 10/10 ; unitaires 32/32.
+- Limite : tablette réelle non vérifiée ; la maquette complète (bannière photo, cadre de l’établissement) reste dépendante de l’image d’affiche que chaque établissement téléverse.
+

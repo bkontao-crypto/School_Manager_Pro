@@ -18,7 +18,12 @@ async function loadReceipt(tenantId, paymentId) {
        LEFT JOIN classes c ON c.tenant_id = s.tenant_id AND c.id = s.class_id JOIN tenants t ON t.id = p.tenant_id
       WHERE p.id = $1 AND p.tenant_id = $2`, [paymentId, tenantId]);
   if (!r.rows[0]) return null;
-  return { ...r.rows[0], logo: await loadTenantLogo(tenantId) };
+  // Affectations du paiement aux factures familiales (lien facture ↔ reçu).
+  const alloc = await db.query(
+    `SELECT i.invoice_number, a.amount::float8 AS amount FROM payment_allocations a
+       JOIN student_invoices i ON i.id = a.invoice_id AND i.tenant_id = a.tenant_id
+      WHERE a.payment_id = $1 AND a.tenant_id = $2 ORDER BY i.invoice_number`, [paymentId, tenantId]);
+  return { ...r.rows[0], allocations: alloc.rows, logo: await loadTenantLogo(tenantId) };
 }
 
 function renderReceipt(x) {
@@ -50,6 +55,23 @@ function renderReceipt(x) {
   row('Mode de paiement', x.method || '-');
   row('Numéro de reçu', x.receipt_number || '-');
   y -= 14;
+
+  // Affectations aux factures (si le paiement a été affecté, en tout ou en partie)
+  if (x.allocations && x.allocations.length) {
+    pdf.text(L, y, 'AFFECTÉ AUX FACTURES', { size: 7.5, bold: true, color: C.muted }); y -= 16;
+    let used = 0;
+    for (const a of x.allocations) {
+      used += Number(a.amount);
+      pdf.text(L + 4, y, `Facture ${a.invoice_number}`, { size: 10, color: C.text });
+      pdf.text(R - 10, y, money(a.amount), { size: 10, bold: true, color: C.ink, align: 'right' });
+      pdf.line(L, y - 8, R, y - 8, { color: C.border, width: 0.6 });
+      y -= 18;
+    }
+    const rest = Math.round((Number(x.amount) - used) * 100) / 100;
+    pdf.text(L + 4, y, 'Reste non affecté', { size: 10, bold: true, color: C.muted });
+    pdf.text(R - 10, y, money(rest), { size: 10, bold: true, color: rest > 0 ? C.warnInk : C.goodInk, align: 'right' });
+    y -= 26;
+  }
 
   // Montant en lettres
   const words = amountInWords(x.amount);

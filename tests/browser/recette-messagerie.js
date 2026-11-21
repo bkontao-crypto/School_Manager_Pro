@@ -1,3 +1,12 @@
+// Le menu regroupe les modules sous des rubriques repliées : on ouvre la rubrique comme le ferait un utilisateur.
+async function navTo(page, key) {
+  await page.evaluate((k) => {
+    const a = document.querySelector(`nav [data-module="${k}"]`);
+    const w = a && a.closest('[data-group-wrap]');
+    if (w && w.querySelector('.nav-panel').classList.contains('hidden')) w.querySelector('[data-group]').click();
+  }, key);
+  await page.click(`nav [data-module="${key}"]`);
+}
 // Recette navigateur de la messagerie côté destinataire (ordonnance §4.1 point 6, §8.4).
 // Prérequis : serveur sur http://127.0.0.1:3100 avec la base de test (_test) et les comptes de recette
 // (admin@a.test, prof@a.test). Lancer : node tests/browser/recette-messagerie.js
@@ -35,7 +44,7 @@ async function tokenOf(email, pwd) { return (await api('POST', '/api/auth/login'
   await page.fill('input[name=tenant_code]', 'ECOLEA'); await page.fill('input[name=email]', 'prof@a.test'); await page.fill('input[name=password]', PWD);
   await page.click('#login-submit');
   await page.waitForFunction(() => document.querySelector('#login-overlay')?.classList.contains('hidden'), null, { timeout: 15000 });
-  await page.click('nav [data-module="messages"]'); await page.waitForTimeout(800);
+  await navTo(page, 'messages'); await page.waitForTimeout(800);
   const conversation = page.locator('[data-conv]', { hasText: title }).first();
   check('le destinataire voit la conversation dans sa liste', (await conversation.count()) === 1);
   await conversation.click(); await page.waitForTimeout(1500);

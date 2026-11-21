@@ -8,6 +8,9 @@ Le détail des corrections issues de l'audit est dans `docs/AUDIT_SUIVI.md`.
 - [x] Écrans : emploi du temps, rapports (+ export CSV), paramètres, utilisateurs, fil de messages, RH, documents, stocks
 - [x] Modules connectés : élèves (dossier individuel, suppression logique), classes, enseignants, présences, notes, paiements (reçus numérotés), messagerie, documents, stocks, notifications, RH, bibliothèque, cantine, transport
 - [x] Tableau de bord alimenté par des statistiques SQL
+- [x] Refonte UI phase 4 : pages de liste des modules alignées sur la maquette (ordinateur et tablette vérifiés)
+- [x] Refonte UI phase 3 : menu latéral à rubriques repliables selon la maquette, mobile 390 px (branche `refonte-ui-phase1`)
+- [x] Refonte UI phase 2 : tableau de bord selon la maquette (tendances serveur ou « Pas de donnée »), affiche d'accueil en diaporama de 6 images maximum (branche `refonte-ui-phase1`)
 - [x] Interface locale (sans CDN), connexion, modales, PWA testée hors ligne
 - [x] Tests automatisés (unitaires + intégration)
 - [x] Affiche d'accueil personnalisable par établissement (exigences de format, taille, résolution) + affiche par défaut
@@ -16,6 +19,12 @@ Le détail des corrections issues de l'audit est dans `docs/AUDIT_SUIVI.md`.
 - [x] Identité personnalisable (nom, slogan, logo) : plateforme et établissements
 - [x] Rappels automatiques par e-mail (licences, factures impayées), journal et écran « E-mails » (v2.11.0)
 - [x] Factures : envoi par e-mail, TVA, remises, avoirs, mentions légales (v2.11.0)
+- [x] Factures familiales (refonte finances, migration 035) : grilles de frais par établissement, factures par élève numérotées FAC-000001, lignes calculées côté serveur, affectation de paiements encaissés (même élève, pas de sur-affectation, verrous de ligne), retrait d’une affectation, annulation qui libère les affectations
+- [x] Factures familiales : PDF de facture (solde, paiements affectés, montant en lettres) et envoi aux responsables de l’élève ayant une adresse e-mail (file d’envoi, journalisé, réessayable)
+- [x] Lien facture ↔ reçu : le reçu PDF liste les factures affectées et le reste non affecté ; facture PDF multi-pages (en-tête répétée)
+- [x] Envoi réel vérifié par SMTP de test (message avec pièce jointe PDF)
+- [x] Relance d’un envoi de facture familiale : pièce jointe régénérée à partir de l’état actuel ; facture annulée non envoyée
+- [x] Accueil connecté : nom réel de l’établissement dans l’affiche par défaut, pastilles de tendance intégrées sans chevauchement, libellés français de toutes les actions du journal
 - [x] Mot de passe oublié par e-mail (v2.11.0)
 - [x] Bulletin : appréciation de l'enseignant et décision du conseil, impression / PDF (v2.11.0)
 - [x] Sauvegarde / restauration et guide de déploiement Windows (v2.11.0)

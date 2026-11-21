@@ -1748,6 +1748,284 @@ if (!TEST_URL) {
       });
     });
 
+    describe('Bannière multi-images (phase 2)', () => {
+      const mkPng = (w, h) => {
+        const b = Buffer.alloc(40);
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(b, 0);
+        b.writeUInt32BE(13, 8); b.write('IHDR', 12, 'ascii'); b.writeUInt32BE(w, 16); b.writeUInt32BE(h, 20);
+        return b;
+      };
+      const BI = '/api/settings/banner/images';
+      const up = (token, w = 1600, h = 400) => api('POST', BI, { token, raw: mkPng(w, h), headers: { 'Content-Type': 'image/png' } });
+      const list = (token) => api('GET', BI, { token });
+
+      it('ajout, limite, image principale, ordre, cadrage, suppression ; isolement entre établissements', async () => {
+        const start = (await list(tokens.adminA)).json.data.items.length;
+        // droits : seul l'administrateur écrit ; proportions contrôlées
+        assert.equal((await up(tokens.teacherA)).status, 403);
+        assert.equal((await up(tokens.adminA, 1600, 800)).status, 400);
+        // remplissage jusqu'à la limite, puis refus
+        for (let i = start; i < 6; i++) assert.equal((await up(tokens.adminA)).status, 201);
+        assert.equal((await up(tokens.adminA)).status, 400);
+        let items = (await list(tokens.adminA)).json.data.items;
+        assert.equal(items.length, 6);
+        assert.equal(items.filter((i) => i.is_primary).length, 1);
+        // isolement : l'établissement B ne voit ni la liste ni les fichiers de A
+        const itemsB = (await list(tokens.adminB)).json.data.items;
+        assert.ok(!itemsB.some((x) => items.some((y) => y.id === x.id)));
+        const own = await fetch(`${base}${items[0].url}`, { headers: { Authorization: `Bearer ${tokens.adminA}` } });
+        assert.equal(own.status, 200);
+        const foreign = await fetch(`${base}${items[0].url}`, { headers: { Authorization: `Bearer ${tokens.adminB}` } });
+        assert.equal(foreign.status, 404);
+        // image principale : une seule à la fois
+        const second = items[1].id;
+        assert.equal((await api('PUT', `${BI}/${second}`, { token: tokens.adminA, body: { is_primary: true } })).status, 200);
+        items = (await list(tokens.adminA)).json.data.items;
+        assert.equal(items.find((i) => i.is_primary).id, second);
+        assert.equal(items.filter((i) => i.is_primary).length, 1);
+        // cadrage borné à 0-100
+        assert.equal((await api('PUT', `${BI}/${second}`, { token: tokens.adminA, body: { focal_x: 120 } })).status, 400);
+        const focused = await api('PUT', `${BI}/${second}`, { token: tokens.adminA, body: { focal_x: 30, focal_y: 70 } });
+        assert.equal(focused.status, 200);
+        assert.equal(focused.json.data.focal_x, 30);
+        // ordre : liste incomplète refusée, liste complète acceptée
+        assert.equal((await api('PUT', `${BI}/order`, { token: tokens.adminA, body: { ids: [second] } })).status, 400);
+        const reversed = items.map((i) => i.id).reverse();
+        assert.equal((await api('PUT', `${BI}/order`, { token: tokens.adminA, body: { ids: reversed } })).status, 200);
+        items = (await list(tokens.adminA)).json.data.items;
+        assert.deepEqual(items.map((i) => i.id), reversed);
+        // suppression de l'image principale : la première restante devient principale
+        assert.equal((await api('DELETE', `${BI}/${second}`, { token: tokens.adminA })).status, 200);
+        items = (await list(tokens.adminA)).json.data.items;
+        assert.equal(items.length, 5);
+        assert.equal(items.filter((i) => i.is_primary).length, 1);
+        // nettoyage
+        for (const i of items) assert.equal((await api('DELETE', `${BI}/${i.id}`, { token: tokens.adminA })).status, 200);
+        assert.equal((await list(tokens.adminA)).json.data.items.length, 0);
+      });
+    });
+
+    describe('Finances · factures familiales et affectation des paiements', () => {
+      let sid;
+      let sidOther;
+      let sidB;
+      const payFor = async (token, student_id, amount, extra = {}) => (await api('POST', '/api/payments', { token, body: { student_id, amount, ...extra } })).json.data;
+      const invoice = (token, student_id, items, extra = {}) => api('POST', '/api/invoices', { token, body: { student_id, items, ...extra } });
+      const allocate = (token, invoiceId, payment_id, amount) => api('POST', `/api/invoices/${invoiceId}/allocations`, { token, body: { payment_id, amount } });
+      before(async () => {
+        sid = (await api('POST', '/api/students', { token: tokens.adminA, body: { matricule: 'INV-A1', first_name: 'Inv', last_name: 'Un' } })).json.data.id;
+        sidOther = (await api('POST', '/api/students', { token: tokens.adminA, body: { matricule: 'INV-A2', first_name: 'Inv', last_name: 'Deux' } })).json.data.id;
+        sidB = (await api('POST', '/api/students', { token: tokens.adminB, body: { matricule: 'INV-B1', first_name: 'Inv', last_name: 'B' } })).json.data.id;
+      });
+
+      it('grilles de frais par établissement, facture avec total calculé par le serveur et numérotation FAC-', async () => {
+        const fee = await api('POST', '/api/invoices/fee-structures', { token: tokens.adminA, body: { label: 'Scolarité T1', amount: 45000 } });
+        assert.equal(fee.status, 201);
+        assert.equal((await api('GET', '/api/invoices/fee-structures', { token: tokens.adminB })).json.data.some((f) => f.label === 'Scolarité T1'), false);
+        const r = await invoice(tokens.adminA, sid, [{ label: 'Scolarité', quantity: 1, unit_amount: 45000 }, { label: 'Cantine', quantity: 2, unit_amount: 1500 }], { total: 1 });
+        assert.equal(r.status, 201);
+        assert.match(r.json.invoice_number, /^FAC-\d{6}$/);
+        const detail = (await api('GET', `/api/invoices/${r.json.id}`, { token: tokens.adminA })).json;
+        assert.equal(Number(detail.total), 48000, 'le total fourni par le client est ignoré');
+        assert.equal(Number(detail.balance), 48000);
+        assert.equal(detail.items.length, 2);
+        const r2 = await invoice(tokens.adminA, sid, [{ label: 'Transport', unit_amount: 1000 }]);
+        assert.equal(r2.json.invoice_number, `FAC-${String(Number(r.json.invoice_number.slice(4)) + 1).padStart(6, '0')}`);
+        assert.equal((await api('DELETE', `/api/invoices/fee-structures/${fee.json.id}`, { token: tokens.adminA })).status, 200);
+      });
+
+      it('refuse les lignes invalides, un élève d’un autre établissement et les rôles sans droit d’écriture', async () => {
+        assert.equal((await invoice(tokens.adminA, sid, [])).status, 400);
+        assert.equal((await invoice(tokens.adminA, sid, [{ label: 'X', quantity: 0, unit_amount: 10 }])).status, 400);
+        assert.equal((await invoice(tokens.adminA, sid, [{ label: 'X', unit_amount: -5 }])).status, 400);
+        assert.equal((await invoice(tokens.adminA, sidB, [{ label: 'X', unit_amount: 10 }])).status, 422, 'élève de l’établissement B');
+        assert.equal((await invoice(tokens.adminA, 'ffffffff-ffff-4fff-8fff-ffffffffffff', [{ label: 'X', unit_amount: 10 }])).status, 422);
+        assert.equal((await invoice(tokens.teacherA, sid, [{ label: 'X', unit_amount: 10 }])).status, 403);
+        assert.equal((await api('GET', '/api/invoices', { token: tokens.teacherA })).status, 403);
+        assert.equal((await api('GET', '/api/invoices', { token: tokens.adminB })).json.meta.total, 0, 'isolation : factures de A invisibles pour B');
+      });
+
+      it('affecte un paiement dans la limite du solde facture et du solde paiement, sans sur-affectation', async () => {
+        const pay = await payFor(tokens.adminA, sid, 10000);
+        const inv1 = (await invoice(tokens.adminA, sid, [{ label: 'Frais', unit_amount: 6000 }])).json;
+        const inv2 = (await invoice(tokens.adminA, sid, [{ label: 'Frais', unit_amount: 5000 }])).json;
+        assert.equal((await allocate(tokens.adminA, inv1.id, pay.id, 6000)).status, 201);
+        const avail = (await api('GET', `/api/invoices/allocatable-payments?student_id=${sid}`, { token: tokens.adminA })).json.data;
+        assert.equal(Number(avail.find((p) => p.id === pay.id).remaining), 4000);
+        assert.equal((await allocate(tokens.adminA, inv2.id, pay.id, 4500)).status, 422, 'supérieur au solde disponible du paiement');
+        assert.equal((await allocate(tokens.adminA, inv1.id, pay.id, 100)).status, 409, 'facture déjà soldée');
+        assert.equal((await allocate(tokens.adminA, inv2.id, pay.id, 4000)).status, 201);
+        const paid = (await api('GET', `/api/invoices/${inv2.id}`, { token: tokens.adminA })).json;
+        assert.equal(Number(paid.balance), 1000);
+        assert.equal((await api('GET', '/api/invoices', { token: tokens.accountantA })).status, 200);
+        const payFull = (await api('GET', `/api/invoices/allocatable-payments?student_id=${sid}`, { token: tokens.adminA })).json.data;
+        assert.equal(payFull.some((p) => p.id === pay.id), false, 'paiement entièrement affecté retiré de la liste');
+      });
+
+      it('règles : paiement d’un autre élève, paiement non encaissé, paiement d’un autre établissement', async () => {
+        const inv = (await invoice(tokens.adminA, sid, [{ label: 'Règle', unit_amount: 300 }])).json;
+        const other = await payFor(tokens.adminA, sidOther, 500);
+        const pending = await payFor(tokens.adminA, sid, 500, { status: 'en_attente' });
+        const foreign = await payFor(tokens.adminB, sidB, 500);
+        assert.equal((await allocate(tokens.adminA, inv.id, other.id, 100)).status, 422);
+        assert.equal((await allocate(tokens.adminA, inv.id, pending.id, 100)).status, 409);
+        assert.equal((await allocate(tokens.adminA, inv.id, foreign.id, 100)).status, 404);
+        assert.equal((await allocate(tokens.adminA, inv.id, pending.id, 0)).status, 400);
+      });
+
+      it('deux affectations simultanées sur le même reste à payer : une seule réussit', async () => {
+        const pay = await payFor(tokens.adminA, sid, 5000);
+        const i1 = (await invoice(tokens.adminA, sid, [{ label: 'Course', unit_amount: 4000 }])).json;
+        const i2 = (await invoice(tokens.adminA, sid, [{ label: 'Course', unit_amount: 4000 }])).json;
+        const [a, b] = await Promise.all([allocate(tokens.adminA, i1.id, pay.id, 4000), allocate(tokens.adminA, i2.id, pay.id, 4000)]);
+        assert.deepEqual([a.status, b.status].sort(), [201, 422]);
+        const sum = await pool.query('SELECT COALESCE(SUM(amount),0)::text AS s FROM payment_allocations WHERE payment_id = $1', [pay.id]);
+        assert.equal(Number(sum.rows[0].s), 4000);
+      });
+
+      it('annulation : libère les affectations, reste visible, bloque toute nouvelle affectation', async () => {
+        const pay = await payFor(tokens.adminA, sid, 3000);
+        const inv = (await invoice(tokens.adminA, sid, [{ label: 'Annulable', unit_amount: 3000 }])).json;
+        assert.equal((await allocate(tokens.adminA, inv.id, pay.id, 3000)).status, 201);
+        const c = await api('POST', `/api/invoices/${inv.id}/cancel`, { token: tokens.adminA });
+        assert.equal(c.status, 200);
+        assert.equal(c.json.released, '3000.00');
+        const detail = (await api('GET', `/api/invoices/${inv.id}`, { token: tokens.adminA })).json;
+        assert.equal(detail.status, 'annulee');
+        assert.equal(detail.allocations.length, 0);
+        assert.equal((await api('POST', `/api/invoices/${inv.id}/cancel`, { token: tokens.adminA })).status, 409);
+        assert.equal((await allocate(tokens.adminA, inv.id, pay.id, 100)).status, 409);
+        const avail = (await api('GET', `/api/invoices/allocatable-payments?student_id=${sid}`, { token: tokens.adminA })).json.data;
+        assert.equal(Number(avail.find((p) => p.id === pay.id).remaining), 3000, 'montant de nouveau disponible');
+        const log = await pool.query("SELECT count(*)::int AS n FROM audit_logs WHERE tenant_id = $1 AND action = 'invoice.cancel'", [TA]);
+        assert.ok(log.rows[0].n >= 1, 'annulation journalisée');
+      });
+    });
+
+    describe('Finances · PDF de facture et envoi aux responsables', () => {
+      let sidP;
+      let sidNoMail;
+      let invP;
+      let invNoMail;
+      let invCancelled;
+      before(async () => {
+        sidP = (await api('POST', '/api/students', { token: tokens.adminA, body: { matricule: 'PDF-A1', first_name: 'Pdf', last_name: 'Famille' } })).json.data.id;
+        sidNoMail = (await api('POST', '/api/students', { token: tokens.adminA, body: { matricule: 'PDF-A2', first_name: 'Sans', last_name: 'Mail' } })).json.data.id;
+        const par = await pool.query(`INSERT INTO parents (tenant_id, first_name, last_name, email) VALUES ($1, 'Mère', 'Test', 'mere@famille.test') RETURNING id`, [TA]);
+        await pool.query(`INSERT INTO student_parents (tenant_id, student_id, parent_id, relationship, is_primary) VALUES ($1, $2, $3, 'Mère', true)`, [TA, sidP, par.rows[0].id]);
+        const noPar = await pool.query(`INSERT INTO parents (tenant_id, first_name, last_name, phone) VALUES ($1, 'Sans', 'Courriel', '70000000') RETURNING id`, [TA]);
+        await pool.query(`INSERT INTO student_parents (tenant_id, student_id, parent_id, relationship) VALUES ($1, $2, $3, 'Père')`, [TA, sidNoMail, noPar.rows[0].id]);
+        invP = (await api('POST', '/api/invoices', { token: tokens.adminA, body: { student_id: sidP, items: [{ label: 'Scolarité', unit_amount: 30000 }, { label: 'Cantine', quantity: 3, unit_amount: 2000 }] } })).json;
+        invNoMail = (await api('POST', '/api/invoices', { token: tokens.adminA, body: { student_id: sidNoMail, items: [{ label: 'Scolarité', unit_amount: 1000 }] } })).json;
+        invCancelled = (await api('POST', '/api/invoices', { token: tokens.adminA, body: { student_id: sidP, items: [{ label: 'Annulée', unit_amount: 500 }] } })).json;
+        await api('POST', `/api/invoices/${invCancelled.id}/cancel`, { token: tokens.adminA });
+      });
+
+      it('PDF de la facture : téléchargeable par son établissement, introuvable pour un autre', async () => {
+        const r = await api('GET', `/api/invoices/${invP.id}/invoice.pdf`, { token: tokens.adminA });
+        assert.equal(r.status, 200);
+        assert.match(r.headers.get('content-type'), /application\/pdf/);
+        assert.equal(r.text.slice(0, 5), '%PDF-');
+        const many = await api('POST', '/api/invoices', { token: tokens.adminA, body: { student_id: sidP, items: Array.from({ length: 30 }, (_, i) => ({ label: `Ligne ${i + 1}`, unit_amount: 1000 })) } });
+        const longPdf = await api('GET', `/api/invoices/${many.json.id}/invoice.pdf`, { token: tokens.adminA });
+        assert.equal(longPdf.status, 200);
+        assert.ok((longPdf.text.match(/\/Type \/Page[^s]/g) || []).length >= 2, 'une facture de 30 lignes tient sur plusieurs pages');
+        assert.equal((await api('GET', `/api/invoices/${invP.id}/invoice.pdf`, { token: tokens.adminB })).status, 404);
+        assert.equal((await api('GET', `/api/invoices/${invP.id}/invoice.pdf`, { token: tokens.teacherA })).status, 403);
+      });
+
+      it('envoi : aux responsables ayant un e-mail, journalisé dans la file d’envoi ; refus si pas d’adresse, facture annulée ou rôle sans droit', async () => {
+        const s = await api('POST', `/api/invoices/${invP.id}/send`, { token: tokens.adminA });
+        assert.equal(s.status, 200);
+        assert.equal(s.json.data.length, 1);
+        assert.equal(s.json.data[0].to, 'mere@famille.test');
+        assert.ok(['sent', 'failed', 'skipped'].includes(s.json.data[0].status));
+        const row = await pool.query(`SELECT kind, ref, tenant_id FROM mail_outbox WHERE ref = $1`, [invP.id]);
+        assert.equal(row.rows.length, 1);
+        assert.equal(row.rows[0].kind, 'family_invoice');
+        assert.equal(row.rows[0].tenant_id, TA);
+        assert.equal((await api('POST', `/api/invoices/${invNoMail.id}/send`, { token: tokens.adminA })).status, 422);
+        assert.equal((await api('POST', `/api/invoices/${invCancelled.id}/send`, { token: tokens.adminA })).status, 409);
+        assert.equal((await api('POST', `/api/invoices/${invP.id}/send`, { token: tokens.teacherA })).status, 403);
+        assert.equal((await api('POST', `/api/invoices/${invP.id}/send`, { token: tokens.adminB })).status, 404);
+      });
+
+      it('envoi réel par SMTP : message avec la facture PDF en pièce jointe ; reçu affecté : PDF ; facture annulée : pas d’envoi', async () => {
+        const { startFakeSmtp } = require('../helpers/fakeSmtp');
+        const smtp = await startFakeSmtp();
+        const keys = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_SECURE', 'MAIL_FROM'];
+        try {
+          process.env.SMTP_HOST = '127.0.0.1'; process.env.SMTP_PORT = String(smtp.port); process.env.SMTP_SECURE = 'false'; process.env.MAIL_FROM = 'noreply@smp.test';
+          const s = await api('POST', `/api/invoices/${invP.id}/send`, { token: tokens.adminA });
+          assert.equal(s.status, 200, s.text);
+          assert.equal(s.json.data[0].status, 'sent', JSON.stringify(s.json.data));
+          assert.equal(smtp.messages.length, 1);
+          assert.deepEqual(smtp.messages[0].to, ['<mere@famille.test>']);
+          assert.match(smtp.messages[0].raw, /application\/pdf/);
+          assert.match(smtp.messages[0].raw, /facture-FAC-\d{6}\.pdf/);
+        } finally {
+          keys.forEach((k) => delete process.env[k]);
+          await smtp.close();
+        }
+        // Reçu d'un paiement affecté à la facture : PDF généré
+        const pay = (await api('POST', '/api/payments', { token: tokens.adminA, body: { student_id: sidP, amount: 30000 } })).json.data;
+        const alloc = await api('POST', `/api/invoices/${invP.id}/allocations`, { token: tokens.adminA, body: { payment_id: pay.id, amount: 20000 } });
+        assert.equal(alloc.status, 201, alloc.text);
+        const rc = await api('GET', `/api/payments/${pay.id}/receipt.pdf`, { token: tokens.adminA });
+        assert.equal(rc.status, 200);
+        assert.equal(rc.text.slice(0, 5), '%PDF-');
+        const cancelled = await api('POST', `/api/invoices/${invCancelled.id}/send`, { token: tokens.adminA });
+        assert.equal(cancelled.status, 409);
+      });
+
+      it('relance d’un envoi : pièce jointe régénérée à la relance ; facture annulée entre-temps : pas d’envoi', async () => {
+        const { startFakeSmtp } = require('../helpers/fakeSmtp');
+        const keys = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_SECURE', 'MAIL_FROM'];
+        keys.forEach((k) => delete process.env[k]);
+        const inv = (await api('POST', '/api/invoices', { token: tokens.adminA, body: { student_id: sidP, items: [{ label: 'Relance', unit_amount: 7000 }] } })).json;
+        const off = await api('POST', `/api/invoices/${inv.id}/send`, { token: tokens.adminA });
+        assert.equal(off.json.data[0].status, 'skipped');
+        const outbox = (await pool.query(`SELECT id FROM mail_outbox WHERE ref = $1 AND status = 'skipped'`, [inv.id])).rows[0];
+        assert.ok(outbox, 'message consigné dans la file');
+        const smtp = await startFakeSmtp();
+        try {
+          process.env.SMTP_HOST = '127.0.0.1'; process.env.SMTP_PORT = String(smtp.port); process.env.SMTP_SECURE = 'false'; process.env.MAIL_FROM = 'noreply@smp.test';
+          const r = await api('POST', `/api/platform/mail/outbox/${outbox.id}/retry`, { token: tokens.root });
+          assert.equal(r.status, 200, r.text);
+          assert.equal(smtp.messages.length, 1);
+          assert.match(smtp.messages[0].raw, /application\/pdf/);
+          assert.match(smtp.messages[0].raw, new RegExp(`facture-${inv.invoice_number}\\.pdf`));
+          const inv3 = (await api('POST', '/api/invoices', { token: tokens.adminA, body: { student_id: sidP, items: [{ label: 'Tardive', unit_amount: 900 }] } })).json;
+          // envoi consigné sans SMTP, puis facture annulée avant la relance
+          keys.forEach((k) => delete process.env[k]);
+          await api('POST', `/api/invoices/${inv3.id}/send`, { token: tokens.adminA });
+          const row3 = (await pool.query(`SELECT id FROM mail_outbox WHERE ref = $1 AND status = 'skipped'`, [inv3.id])).rows[0];
+          process.env.SMTP_HOST = '127.0.0.1'; process.env.SMTP_PORT = String(smtp.port); process.env.SMTP_SECURE = 'false'; process.env.MAIL_FROM = 'noreply@smp.test';
+          await api('POST', `/api/invoices/${inv3.id}/cancel`, { token: tokens.adminA });
+          const before = smtp.messages.length;
+          const r3 = await api('POST', `/api/platform/mail/outbox/${row3.id}/retry`, { token: tokens.root });
+          assert.equal(r3.status, 502);
+          assert.equal(smtp.messages.length, before, 'aucun envoi pour une facture annulée');
+        } finally {
+          keys.forEach((k) => delete process.env[k]);
+          await smtp.close();
+        }
+      });
+    });
+
+    describe('Accueil : nom réel de l’établissement', () => {
+      it('le tableau de bord renvoie le nom de son établissement, jamais celui d’un autre', async () => {
+        const a = await api('GET', '/api/stats/dashboard', { token: tokens.adminA });
+        const b = await api('GET', '/api/stats/dashboard', { token: tokens.adminB });
+        assert.equal(a.status, 200);
+        const nameA = (await pool.query('SELECT name FROM tenants WHERE id = $1', [TA])).rows[0].name;
+        const nameB = (await pool.query('SELECT name FROM tenants WHERE id = $1', [TB])).rows[0].name;
+        assert.equal(a.json.data.school_name, nameA);
+        assert.equal(b.json.data.school_name, nameB);
+        assert.notEqual(nameA, nameB);
+      });
+    });
+
     describe('Logo de l’établissement dans les bulletins (charte PDF)', () => {
       const zlib = require('node:zlib');
       const realPng = (w, h) => {
