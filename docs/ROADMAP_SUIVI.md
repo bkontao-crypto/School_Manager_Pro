@@ -23,6 +23,7 @@ Le détail des corrections issues de l'audit est dans `docs/AUDIT_SUIVI.md`.
 - [x] Factures familiales : PDF de facture (solde, paiements affectés, montant en lettres) et envoi aux responsables de l’élève ayant une adresse e-mail (file d’envoi, journalisé, réessayable)
 - [x] Lien facture ↔ reçu : le reçu PDF liste les factures affectées et le reste non affecté ; facture PDF multi-pages (en-tête répétée)
 - [x] Envoi réel vérifié par SMTP de test (message avec pièce jointe PDF)
+- [x] Relance d’un envoi de facture familiale : pièce jointe régénérée à partir de l’état actuel ; facture annulée non envoyée
 - [x] Mot de passe oublié par e-mail (v2.11.0)
 - [x] Bulletin : appréciation de l'enseignant et décision du conseil, impression / PDF (v2.11.0)
 - [x] Sauvegarde / restauration et guide de déploiement Windows (v2.11.0)

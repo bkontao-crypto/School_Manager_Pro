@@ -1977,6 +1977,40 @@ if (!TEST_URL) {
         const cancelled = await api('POST', `/api/invoices/${invCancelled.id}/send`, { token: tokens.adminA });
         assert.equal(cancelled.status, 409);
       });
+
+      it('relance d’un envoi : pièce jointe régénérée à la relance ; facture annulée entre-temps : pas d’envoi', async () => {
+        const { startFakeSmtp } = require('../helpers/fakeSmtp');
+        const keys = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_SECURE', 'MAIL_FROM'];
+        keys.forEach((k) => delete process.env[k]);
+        const inv = (await api('POST', '/api/invoices', { token: tokens.adminA, body: { student_id: sidP, items: [{ label: 'Relance', unit_amount: 7000 }] } })).json;
+        const off = await api('POST', `/api/invoices/${inv.id}/send`, { token: tokens.adminA });
+        assert.equal(off.json.data[0].status, 'skipped');
+        const outbox = (await pool.query(`SELECT id FROM mail_outbox WHERE ref = $1 AND status = 'skipped'`, [inv.id])).rows[0];
+        assert.ok(outbox, 'message consigné dans la file');
+        const smtp = await startFakeSmtp();
+        try {
+          process.env.SMTP_HOST = '127.0.0.1'; process.env.SMTP_PORT = String(smtp.port); process.env.SMTP_SECURE = 'false'; process.env.MAIL_FROM = 'noreply@smp.test';
+          const r = await api('POST', `/api/platform/mail/outbox/${outbox.id}/retry`, { token: tokens.root });
+          assert.equal(r.status, 200, r.text);
+          assert.equal(smtp.messages.length, 1);
+          assert.match(smtp.messages[0].raw, /application\/pdf/);
+          assert.match(smtp.messages[0].raw, new RegExp(`facture-${inv.invoice_number}\\.pdf`));
+          const inv3 = (await api('POST', '/api/invoices', { token: tokens.adminA, body: { student_id: sidP, items: [{ label: 'Tardive', unit_amount: 900 }] } })).json;
+          // envoi consigné sans SMTP, puis facture annulée avant la relance
+          keys.forEach((k) => delete process.env[k]);
+          await api('POST', `/api/invoices/${inv3.id}/send`, { token: tokens.adminA });
+          const row3 = (await pool.query(`SELECT id FROM mail_outbox WHERE ref = $1 AND status = 'skipped'`, [inv3.id])).rows[0];
+          process.env.SMTP_HOST = '127.0.0.1'; process.env.SMTP_PORT = String(smtp.port); process.env.SMTP_SECURE = 'false'; process.env.MAIL_FROM = 'noreply@smp.test';
+          await api('POST', `/api/invoices/${inv3.id}/cancel`, { token: tokens.adminA });
+          const before = smtp.messages.length;
+          const r3 = await api('POST', `/api/platform/mail/outbox/${row3.id}/retry`, { token: tokens.root });
+          assert.equal(r3.status, 502);
+          assert.equal(smtp.messages.length, before, 'aucun envoi pour une facture annulée');
+        } finally {
+          keys.forEach((k) => delete process.env[k]);
+          await smtp.close();
+        }
+      });
     });
 
     describe('Logo de l’établissement dans les bulletins (charte PDF)', () => {

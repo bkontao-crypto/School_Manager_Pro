@@ -298,3 +298,9 @@ Limites : envoi réel non vérifié (SMTP non configuré en test : statut « ski
 - Tests : intégration 120/120 ; recettes phase1 18/18, messagerie 9/9, factures 10/10 ; unitaires 32/32.
 - Limites restantes : relance depuis la file sans pièce jointe régénérée ; SMTP réel d’établissement non testé ; PDF de plus de 2 pages vérifié seulement jusqu’à 2.
 
+### Complément : relance d’un envoi de facture familiale
+- La relance (superadmin, file d’envoi) régénère désormais la pièce jointe à partir de la facture actuelle. Une facture annulée entre-temps n’est pas envoyée (réponse 502, aucun envoi).
+- Test : envoi consigné sans SMTP, relance après configuration (message reçu avec la facture PDF), relance refusée pour une facture annulée.
+- Tests : intégration 121/121 ; recettes phase1 18/18, messagerie 9/9, factures 10/10 ; unitaires 32/32.
+- Limite : la relance est réservée au superadmin (file de la plateforme) ; l’établissement relance en renvoyant l’envoi depuis le détail de la facture.
+

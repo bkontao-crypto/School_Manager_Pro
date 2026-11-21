@@ -55,13 +55,21 @@ async function deliver({ tenantId = null, to, subject, text, html, kind = 'other
 // Nouvel essai d'un message en échec (même ligne du journal).
 async function retry(id) {
   const cfg = mailConfig();
-  const r = await db.query(`SELECT id, to_email, subject, body_text, body_html, invoice_id FROM mail_outbox WHERE id = $1 AND status IN ('failed', 'skipped')`, [id]);
+  const r = await db.query(`SELECT id, tenant_id, to_email, subject, body_text, body_html, invoice_id, kind, ref FROM mail_outbox WHERE id = $1 AND status IN ('failed', 'skipped')`, [id]);
   if (!r.rows.length) return null;
   if (!cfg.configured) return { status: 'skipped', error: 'Envoi d’e-mails non configuré.' };
   const m = r.rows[0];
   try {
     let attachments = [];
     if (m.invoice_id) { const inv = await require('./invoiceData').loadInvoice(m.invoice_id); if (inv) attachments = [require('./invoiceData').invoiceAttachment(inv)]; }
+    if (m.kind === 'family_invoice' && m.ref) {
+      // Facture familiale : pièce jointe régénérée à partir de l'état actuel de la facture ; une facture annulée n'est pas envoyée.
+      const fam = require('./familyInvoicePdf');
+      const x = await fam.loadFamilyInvoice(m.tenant_id, m.ref);
+      if (!x) return { status: 'skipped', error: 'Facture introuvable.' };
+      if (x.status !== 'emise') return { status: 'skipped', error: 'Facture annulée : envoi annulé.' };
+      attachments = [{ filename: fam.invoiceFilename(x), contentType: 'application/pdf', content: fam.renderFamilyInvoice(x) }];
+    }
     await sendSmtp({ ...cfg, to: m.to_email, subject: m.subject, text: m.body_text, html: m.body_html, attachments });
     await db.query(`UPDATE mail_outbox SET status = 'sent', attempts = attempts + 1, sent_at = now(), error = NULL WHERE id = $1`, [id]);
     return { status: 'sent' };

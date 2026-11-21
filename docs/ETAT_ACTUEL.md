@@ -6,7 +6,7 @@ Modules financiers, premier périmètre : factures familiales, affectation des p
 
 ## Tests exécutés (sur ce commit)
 - Unitaires : 32/32
-- Intégration (PostgreSQL de test, migrations rejouées) : 120/120
+- Intégration (PostgreSQL de test, migrations rejouées) : 121/121
 - Recettes navigateur : phase1 18/18, messagerie 9/9, factures 10/10
 
 ## Problèmes ouverts
@@ -17,9 +17,9 @@ Modules financiers, premier périmètre : factures familiales, affectation des p
 - Police Poppins : choix provisoire, à confirmer.
 - Messages de champ : vérifiés sur élève, paiement, notes, classes et présences. Enseignants, bibliothèque et stocks vérifiés aussi.
 - Tablettes réelles : non vérifiées (émulation Chromium 768 et 1024 px uniquement).
-- Factures : relance de la file sans pièce jointe régénérée ; SMTP d’établissement réel non testé.
+- Factures : SMTP d’établissement réel non testé ; la relance de la file est réservée au superadmin.
 - Paiement en ligne Orange Money / Moov Money : non configuré (voir `ROADMAP_SUIVI.md`).
 - `docs/SUIVI_EXECUTION_SCHOOL_MANAGER_PRO.xlsx` : non régénéré depuis la phase 2 (sur demande uniquement).
 
 ## Prochaine tâche
-À proposer : décision sur la relance des e-mails de factures (régénérer la pièce jointe), puis prochain module à traiter.
+À proposer : prochain module à traiter (choix à valider avec vous).
