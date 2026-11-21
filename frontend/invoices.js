@@ -90,11 +90,10 @@ async function openFeeStructures() {
       <div class="mt-4 divide-y divide-slate-100 border border-slate-200 rounded-lg">
         ${list.length ? list.map((f) => `<div class="flex items-center justify-between gap-3 px-3 py-2 text-sm"><span class="text-slate-700">${escapeHtml(f.label)}</span><span class="flex items-center gap-3 whitespace-nowrap"><span class="font-semibold text-ink">${invMoney(f.amount)}</span><button type="button" data-fee-del="${escapeHtml(f.id)}" class="text-red-600 hover:underline text-xs font-semibold">Supprimer</button></span></div>`).join('') : '<p class="px-3 py-3 text-sm text-slate-500">Aucun frais enregistré.</p>'}
       </div>
-      <form id="fee-form" class="mt-4 grid grid-cols-1 sm:grid-cols-[1fr_9rem_auto] gap-2 items-end" novalidate>
+      <form id="fee-form" class="mt-4 space-y-3" novalidate>
         <label class="block text-xs font-semibold text-slate-600">Libellé *<input name="label" maxlength="120" class="${INPUT_CLS}"></label>
-        <label class="block text-xs font-semibold text-slate-600">Montant (F CFA) *<input name="amount" inputmode="decimal" class="${INPUT_CLS}"></label>
-        <button type="submit" class="px-4 py-2 rounded-lg bg-royal-600 text-white text-sm font-semibold">Ajouter</button>
-      </form>
+        <div class="flex gap-2 items-end"><label class="block flex-1 text-xs font-semibold text-slate-600">Montant (F CFA) *<input name="amount" inputmode="decimal" class="${INPUT_CLS}"></label>
+        <button type="submit" class="px-4 py-2 rounded-lg bg-royal-600 text-white text-sm font-semibold">Ajouter</button></div></form>
       <p id="fee-msg" class="text-sm mt-3 ${message ? 'text-emerald-700' : 'text-red-600'}" role="alert">${escapeHtml(message)}</p>
       <div class="mt-5 flex justify-end"><button type="button" data-modal-cancel class="px-4 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700">Fermer</button></div>`;
     $('modal-box').querySelector('[data-modal-cancel]').addEventListener('click', () => closeModal(true));
@@ -205,7 +204,8 @@ async function openInvoiceDetail(id) {
   const emise = inv.status === 'emise';
   const open = emise && Number(inv.balance) > 0;
   const avail = canEdit && open ? rows(await get(`/api/invoices/allocatable-payments?student_id=${encodeURIComponent(inv.student_id)}`)) : [];
-  const suggested = (p) => Math.min(Number(inv.balance), Number(p.remaining)).toFixed(2);
+  const amt = (n) => String(Math.round(Number(n) * 100) / 100);
+  const suggested = (p) => amt(Math.min(Number(inv.balance), Number(p.remaining)));
   openModal(`<div class="flex flex-wrap items-start justify-between gap-3">
       <div><p class="text-xs text-slate-500">Facture</p><h3 class="text-lg font-bold text-ink">${escapeHtml(inv.invoice_number)}</h3>
         <p class="text-sm text-slate-600">${escapeHtml(inv.student_name)} · émise le ${invDate(inv.issued_on)}${inv.due_on ? ` · échéance ${invDate(inv.due_on)}` : ''}</p></div>
@@ -223,10 +223,10 @@ async function openInvoiceDetail(id) {
         <span class="text-slate-700">Reçu ${escapeHtml(a.receipt_number)} · ${new Date(a.paid_at).toLocaleDateString('fr-FR')}</span>
         <span class="flex items-center gap-3 whitespace-nowrap"><span class="font-semibold">${invMoney(a.amount)}</span>
         ${canEdit && emise ? `<button type="button" data-unalloc="${escapeHtml(a.id)}" class="text-red-600 hover:underline text-xs font-semibold">Retirer</button>` : ''}</span></li>`).join('')}</ul>` : '<p class="text-sm text-slate-500">Aucun paiement affecté.</p>'}
-    ${open && canEdit ? (avail.length ? `<form id="alloc-form" class="mt-4 grid grid-cols-1 sm:grid-cols-[1fr_9rem_auto] gap-2 items-end" novalidate>
+    ${open && canEdit ? (avail.length ? `<form id="alloc-form" class="mt-4 space-y-3" novalidate>
         <label class="block text-xs font-semibold text-slate-600">Paiement encaissé<select name="payment_id" class="${INPUT_CLS}">${avail.map((p) => `<option value="${escapeHtml(p.id)}" data-remaining="${escapeHtml(p.remaining)}">Reçu ${escapeHtml(p.receipt_number)} — reste ${invMoney(p.remaining)}</option>`).join('')}</select></label>
-        <label class="block text-xs font-semibold text-slate-600">Montant (F)<input name="amount" inputmode="decimal" value="${suggested(avail[0])}" class="${INPUT_CLS}"></label>
-        <button type="submit" class="px-4 py-2 rounded-lg bg-royal-600 text-white text-sm font-semibold">Affecter</button></form>` : '<p class="text-sm text-slate-500 mt-4">Aucun paiement encaissé disponible pour cet élève.</p>') : ''}
+        <div class="flex gap-2 items-end"><label class="block flex-1 text-xs font-semibold text-slate-600">Montant (F)<input name="amount" inputmode="decimal" value="${suggested(avail[0])}" class="${INPUT_CLS}"></label>
+        <button type="submit" class="px-4 py-2 rounded-lg bg-royal-600 text-white text-sm font-semibold">Affecter</button></div></form>` : '<p class="text-sm text-slate-500 mt-4">Aucun paiement encaissé disponible pour cet élève.</p>') : ''}
     ${canEdit && emise ? '<div class="mt-5 pt-4 border-t border-slate-100 text-right"><button type="button" id="inv-cancel" class="text-sm font-semibold text-red-600 hover:underline">Annuler la facture</button></div>' : ''}
     <p id="inv-detail-msg" class="text-sm mt-3 text-red-600" role="alert"></p>
     <div class="mt-4 flex justify-end"><button type="button" data-modal-cancel class="px-4 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-700">Fermer</button></div>`);
@@ -237,7 +237,7 @@ async function openInvoiceDetail(id) {
   const alloc = $('alloc-form');
   if (alloc) {
     const sel = alloc.payment_id;
-    sel.addEventListener('change', () => { alloc.amount.value = Math.min(Number(inv.balance), Number(sel.selectedOptions[0].dataset.remaining)).toFixed(2); });
+    sel.addEventListener('change', () => { alloc.amount.value = amt(Math.min(Number(inv.balance), Number(sel.selectedOptions[0].dataset.remaining))); });
     alloc.addEventListener('submit', async (ev) => {
       ev.preventDefault(); msg.textContent = '';
       try {

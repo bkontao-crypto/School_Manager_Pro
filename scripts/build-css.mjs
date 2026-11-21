@@ -14,7 +14,7 @@ catch { console.error('tailwindcss est introuvable : lancez « npm install » (d
 const { compile } = await import(
   pathToFileURL(path.join(TW, 'dist/lib.mjs')).href
 );
-const sources = ['frontend/index.html', 'frontend/app.js'].map((f) => fs.readFileSync(path.join(root, f), 'utf8')).join('\n');
+const sources = ['frontend/index.html', 'frontend/app.js', 'frontend/invoices.js'].map((f) => fs.readFileSync(path.join(root, f), 'utf8')).join('\n');
 const candidates = new Set(sources.match(/[^\s"'`<>=(){};,]+/g) || []);
 
 const input = `
