@@ -345,13 +345,47 @@ const ACTION_LABELS = {
   'timetable_slot.create': 'Cours ajouté à l’emploi du temps', 'timetable_slot.delete': 'Cours retiré de l’emploi du temps',
   'academic_period.create': 'Période scolaire créée', 'academic_period.delete': 'Période scolaire supprimée',
   'user.create': 'Utilisateur créé', 'user.update': 'Utilisateur modifié', 'user.password_reset': 'Mot de passe réinitialisé',
-  'report.export_payments': 'Export des paiements', 'book.create': 'Livre ajouté', 'menu.create': 'Menu ajouté', 'transport_route.create': 'Circuit de transport ajouté'
+  'report.export_payments': 'Export des paiements', 'book.create': 'Livre ajouté', 'menu.create': 'Menu ajouté', 'transport_route.create': 'Circuit de transport ajouté',
+  "invoice.create": "Facture familiale créée",
+  "invoice.allocate": "Paiement affecté à une facture",
+  "invoice.unallocate": "Affectation de paiement retirée",
+  "invoice.cancel": "Facture familiale annulée",
+  "invoice.send": "Facture envoyée aux responsables",
+  "fee_structure.create": "Frais ajouté à la grille",
+  "fee_structure.delete": "Frais retiré de la grille",
+  "academic_period.close": "Période scolaire clôturée",
+  "academic_period.reopen": "Période scolaire rouverte",
+  "broadcast.send": "Diffusion envoyée",
+  "broadcast.unpaid": "Relance des impayés envoyée",
+  "conversation.participant_add": "Participant ajouté à la conversation",
+  "conversation.participant_remove": "Participant retiré de la conversation",
+  "document.download": "Document téléchargé",
+  "document.upload": "Document téléversé",
+  "grade.cancel": "Note annulée",
+  "grade.correction_approve": "Correction de note approuvée",
+  "grade.correction_reject": "Correction de note refusée",
+  "grade.correction_request": "Correction de note demandée",
+  "grade.correction_withdraw": "Demande de correction retirée",
+  "grade.export": "Export des notes",
+  "grade.validate": "Notes validées",
+  "notification.settings": "Préférences de notification modifiées",
+  "parent.account_create": "Compte parent créé",
+  "parent.account_delete": "Compte parent supprimé",
+  "parent.preferences": "Préférences parent modifiées",
+  "payment.export": "Export des paiements",
+  "settings.grading": "Barème des notes modifié",
+  "student.export": "Export des élèves",
+  "student.parent_add": "Responsable ajouté à un élève",
+  "student.parent_remove": "Responsable retiré d’un élève",
+  "student.report_comment": "Appréciation de bulletin saisie",
+  "auth.password_change": "Mot de passe modifié"
 };
 function activityText(a) {
   return ACTION_LABELS[a.action] || 'Action enregistrée';
 }
 
 // ---------------------------------------------------------------- Affiche d'accueil
+let schoolName = null;
 const HERO_DEFAULT = { title: $('hero-banner-title').innerHTML, subtitle: $('hero-banner-subtitle').textContent.trim(), src: '/assets/img/banner-default.svg' };
 let bannerBlobUrl = null;
 let heroUrls = []; let heroSlides = []; let heroIdx = 0; let heroTimer = null;
@@ -377,7 +411,7 @@ function applyBannerMeta(m) {
   const custom = !!(m && m.custom);
   const title = m && m.title; const subtitle = m && m.subtitle;
   const t = $('hero-banner-title'); const sub = $('hero-banner-subtitle');
-  if (title) t.textContent = title; else t.innerHTML = HERO_DEFAULT.title;
+  if (title) t.textContent = title; else if (schoolName) t.innerHTML = `Bienvenue sur <span class="text-amber-300">${escapeHtml(schoolName)}</span>`; else t.innerHTML = HERO_DEFAULT.title;
   sub.textContent = subtitle || HERO_DEFAULT.subtitle;
   // Affiche personnalisée sans texte : l'image s'affiche seule, sans voile ni titre.
   const showTitle = !custom || !!title;
@@ -564,6 +598,8 @@ async function loadDashboard() {
   loadBanner();
   try {
     const d = (await get('/api/stats/dashboard')).data;
+    schoolName = d.school_name || null;
+    if (!lastBannerMeta || !lastBannerMeta.title) applyBannerMeta(lastBannerMeta || {});
     const t = d.trends || {};
     $('metric-students').textContent = fmtNumber(d.students);
     $('metric-teachers').textContent = fmtNumber(d.teachers);

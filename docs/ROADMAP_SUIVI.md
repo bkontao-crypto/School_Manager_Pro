@@ -24,6 +24,7 @@ Le détail des corrections issues de l'audit est dans `docs/AUDIT_SUIVI.md`.
 - [x] Lien facture ↔ reçu : le reçu PDF liste les factures affectées et le reste non affecté ; facture PDF multi-pages (en-tête répétée)
 - [x] Envoi réel vérifié par SMTP de test (message avec pièce jointe PDF)
 - [x] Relance d’un envoi de facture familiale : pièce jointe régénérée à partir de l’état actuel ; facture annulée non envoyée
+- [x] Accueil connecté : nom réel de l’établissement dans l’affiche par défaut, pastilles de tendance intégrées sans chevauchement, libellés français de toutes les actions du journal
 - [x] Mot de passe oublié par e-mail (v2.11.0)
 - [x] Bulletin : appréciation de l'enseignant et décision du conseil, impression / PDF (v2.11.0)
 - [x] Sauvegarde / restauration et guide de déploiement Windows (v2.11.0)

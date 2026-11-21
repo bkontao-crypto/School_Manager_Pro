@@ -26,7 +26,8 @@ router.get('/dashboard', wrap(async (req, res) => {
          (SELECT count(*) FROM grades WHERE tenant_id = $1 AND status <> 'annulee') AS grades,
          (SELECT count(*) FROM attendances WHERE tenant_id = $1 AND date >= current_date - 29) AS attendance_total,
          (SELECT count(*) FROM attendances WHERE tenant_id = $1 AND date >= current_date - 29
-            AND status IN ('present', 'late')) AS attendance_present`,
+            AND status IN ('present', 'late')) AS attendance_present,
+         (SELECT name FROM tenants WHERE id = $1) AS school_name`,
       [t]
     ),
     canPayments ? db.query(
@@ -98,6 +99,7 @@ router.get('/dashboard', wrap(async (req, res) => {
       teachers: Number(c.teachers),
       classes: Number(c.classes),
       grades: Number(c.grades),
+      school_name: c.school_name || null,
       attendance_rate: total > 0 ? Math.round((Number(c.attendance_present) / total) * 1000) / 10 : null,
       trends: {
         students: pct(c.students, tr.students_prev),

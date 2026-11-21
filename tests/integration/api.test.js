@@ -2013,6 +2013,19 @@ if (!TEST_URL) {
       });
     });
 
+    describe('Accueil : nom réel de l’établissement', () => {
+      it('le tableau de bord renvoie le nom de son établissement, jamais celui d’un autre', async () => {
+        const a = await api('GET', '/api/stats/dashboard', { token: tokens.adminA });
+        const b = await api('GET', '/api/stats/dashboard', { token: tokens.adminB });
+        assert.equal(a.status, 200);
+        const nameA = (await pool.query('SELECT name FROM tenants WHERE id = $1', [TA])).rows[0].name;
+        const nameB = (await pool.query('SELECT name FROM tenants WHERE id = $1', [TB])).rows[0].name;
+        assert.equal(a.json.data.school_name, nameA);
+        assert.equal(b.json.data.school_name, nameB);
+        assert.notEqual(nameA, nameB);
+      });
+    });
+
     describe('Logo de l’établissement dans les bulletins (charte PDF)', () => {
       const zlib = require('node:zlib');
       const realPng = (w, h) => {

@@ -304,3 +304,11 @@ Limites : envoi réel non vérifié (SMTP non configuré en test : statut « ski
 - Tests : intégration 121/121 ; recettes phase1 18/18, messagerie 9/9, factures 10/10 ; unitaires 32/32.
 - Limite : la relance est réservée au superadmin (file de la plateforme) ; l’établissement relance en renvoyant l’envoi depuis le détail de la facture.
 
+### Accueil connecté (tableau de bord) : données réelles
+- Titre de l’affiche par défaut : « Bienvenue sur <nom de l’établissement> » (nom réel du tenant, fourni par /api/stats/dashboard) ; le texte personnalisé de l’établissement reste prioritaire.
+- Cartes de statistiques : pastille de tendance dans la ligne du libellé (plus de chevauchement avec la valeur « 210 500 F ») ; libellés sur une ligne.
+- Activités récentes : libellés français pour toutes les actions journalisées (factures, frais, périodes, notes, diffusions, parents…), au lieu de « Action enregistrée ».
+- Vérifié : captures bureau 1440 px et téléphone 390 px, aucune erreur JavaScript.
+- Tests : intégration 122/122 (dont nom d’établissement par tenant) ; recettes phase1 18/18, messagerie 9/9, factures 10/10 ; unitaires 32/32.
+- Limite : tablette réelle non vérifiée ; la maquette complète (bannière photo, cadre de l’établissement) reste dépendante de l’image d’affiche que chaque établissement téléverse.
+
