@@ -291,3 +291,10 @@ Ajout (même phase) : PDF de facture (GET /api/invoices/:id/invoice.pdf, droit �
 Tests : intégration 119/119 (PDF, isolation, envoi, refus) ; recette factures 10/10 (téléchargement du PDF, message d’envoi) ; phase1 18/18 ; messagerie 9/9 ; unitaires 32/32.
 Limites : envoi réel non vérifié (SMTP non configuré en test : statut « skipped ») ; une relance depuis la file n’a pas de pièce jointe régénérée pour ces factures ; lien facture ↔ reçu non traité ; PDF d’une facture de plus de ~18 lignes non vérifié.
 
+### Complément : lien facture ↔ reçu, envoi SMTP réel, pagination
+- Reçu PDF : section « Affecté aux factures » (numéros des factures, montants, reste non affecté).
+- Facture PDF : tableau sur plusieurs pages, entête répétée ; une facture de 30 lignes (2 pages) vérifiée. Corrections : unitaire et montant ne se chevauchent plus ; séparateur de milliers rendu correctement ; solde affiché à 0 pour une facture annulée.
+- Envoi réel : serveur SMTP de test, message reçu avec pièce jointe PDF, destinataire = responsable de l’élève.
+- Tests : intégration 120/120 ; recettes phase1 18/18, messagerie 9/9, factures 10/10 ; unitaires 32/32.
+- Limites restantes : relance depuis la file sans pièce jointe régénérée ; SMTP réel d’établissement non testé ; PDF de plus de 2 pages vérifié seulement jusqu’à 2.
+
